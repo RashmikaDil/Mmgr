@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useInvestmentStore } from "@/store/investmentStore";
-import { Investment } from "@/types";
+import type { Investment } from "@/types";
 import {
-  Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import {
   PlusCircle, TrendingUp, TrendingDown, Pencil, Trash2,
-  BarChart3, Briefcase,
+  BarChart3, Briefcase, AlertCircle, RefreshCw,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -38,52 +38,85 @@ const TYPE_COLORS: Record<string, string> = {
   Other: "#94a3b8",
 };
 
-const EMPTY_FORM = {
+interface FormState {
+  name: string;
+  type: Investment["type"];
+  amountInvested: string;
+  currentValue: string;
+  purchaseDate: string;
+}
+
+const EMPTY_FORM: FormState = {
   name: "",
-  type: "Stocks" as Investment["type"],
+  type: "Stocks",
   amountInvested: "",
   currentValue: "",
-  purchaseDate: "",
+  purchaseDate: new Date().toISOString().slice(0, 10),
 };
 
 // ── main component ─────────────────────────────────────────────────────────────
 
 export default function InvestmentsPage() {
   const { user } = useAuth();
-  const { investments, loading, fetchInvestments, addInvestment, updateInvestment, deleteInvestment } =
-    useInvestmentStore();
+  const {
+    investments,
+    loading,
+    error: storeError,
+    fetchInvestments,
+    addInvestment,
+    updateInvestment,
+    deleteInvestment,
+    refresh,
+  } = useInvestmentStore();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Investment | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Load investments on mount / when user changes
   useEffect(() => {
-    if (user?.uid) fetchInvestments(user.uid);
-  }, [user, fetchInvestments]);
+    if (user?.uid) {
+      fetchInvestments(user.uid);
+    }
+  }, [user?.uid, fetchInvestments]);
 
   // ── derived stats ─────────────────────────────────────────────────────────────
 
-  const totalInvested = investments.reduce((s, i) => s + i.amountInvested, 0);
-  const totalCurrent  = investments.reduce((s, i) => s + i.currentValue, 0);
+  const totalInvested = investments.reduce((s, i) => s + (i.amountInvested || 0), 0);
+  const totalCurrent  = investments.reduce((s, i) => s + (i.currentValue || 0), 0);
   const totalROI      = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
   const totalGainLoss = totalCurrent - totalInvested;
 
-  // Allocation pie data — group by type
   const allocationData = INVESTMENT_TYPES
     .map((type) => ({
       name: type,
       value: investments
         .filter((i) => i.type === type)
-        .reduce((s, i) => s + i.currentValue, 0),
+        .reduce((s, i) => s + (i.currentValue || 0), 0),
     }))
     .filter((d) => d.value > 0);
+
+  // ── validation ────────────────────────────────────────────────────────────────
+
+  function validate(): string | null {
+    if (!form.name.trim()) return "Investment name is required.";
+    if (!form.purchaseDate) return "Purchase date is required.";
+    const invested = parseFloat(form.amountInvested);
+    if (isNaN(invested) || invested <= 0) return "Amount invested must be a positive number.";
+    const current = parseFloat(form.currentValue);
+    if (isNaN(current) || current < 0) return "Current value must be 0 or more.";
+    return null;
+  }
 
   // ── handlers ─────────────────────────────────────────────────────────────────
 
   function openAdd() {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setFormError(null);
     setOpen(true);
   }
 
@@ -96,43 +129,64 @@ export default function InvestmentsPage() {
       currentValue: String(inv.currentValue),
       purchaseDate: inv.purchaseDate,
     });
+    setFormError(null);
     setOpen(true);
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!user?.uid) return;
-  setSaving(true);
-  const data = {
-    userId: user.uid,
-    name: form.name.trim(),
-    type: form.type,
-    amountInvested: parseFloat(form.amountInvested) || 0,
-    currentValue: parseFloat(form.currentValue) || 0,
-    purchaseDate: form.purchaseDate,
-    familyId: undefined,
-  };
-  try {
-    if (editing) {
-      await updateInvestment(editing.id, data);
-    } else {
-      await addInvestment(data);
-      // Refresh to ensure the latest list from Firestore
-      await fetchInvestments(user.uid);
+  const handleSubmit = async () => {
+    if (!user?.uid) {
+      setFormError("You must be signed in to save investments.");
+      return;
     }
-    alert('Investment saved successfully');
-  } catch (err) {
-    console.error(err);
-    alert(`Failed to save investment: ${(err as Error).message}`);
-  } finally {
-    setSaving(false);
-    setOpen(false);
-  }
-};
+
+    const err = validate();
+    if (err) { setFormError(err); return; }
+
+    setSaving(true);
+    setFormError(null);
+
+    const payload = {
+      userId: user.uid,
+      name: form.name.trim(),
+      type: form.type,
+      amountInvested: parseFloat(form.amountInvested),
+      currentValue: parseFloat(form.currentValue),
+      purchaseDate: form.purchaseDate,
+    };
+
+    try {
+      if (editing) {
+        await updateInvestment(editing.id, payload);
+        setSuccessMsg("Investment updated!");
+      } else {
+        await addInvestment(payload);
+        setSuccessMsg("Investment saved!");
+      }
+      // Always re-fetch from Firestore to confirm persistence
+      await refresh(user.uid);
+      setOpen(false);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      console.error("[InvestmentsPage] Save error:", err);
+      setFormError(err?.message ?? "Failed to save investment. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   async function handleDelete(id: string) {
-    if (confirm("Delete this investment?")) await deleteInvestment(id);
+    if (!confirm("Delete this investment? This cannot be undone.")) return;
+    try {
+      await deleteInvestment(id);
+      if (user?.uid) await refresh(user.uid);
+    } catch (err: any) {
+      console.error("[InvestmentsPage] Delete error:", err);
+    }
   }
+
+  const handleRefresh = useCallback(async () => {
+    if (user?.uid) await refresh(user.uid);
+  }, [user?.uid, refresh]);
 
   // ── render ───────────────────────────────────────────────────────────────────
 
@@ -146,11 +200,31 @@ export default function InvestmentsPage() {
             Track your portfolio value, ROI, and asset allocation.
           </p>
         </div>
-        <Button onClick={openAdd} className="gap-2 self-start sm:self-auto">
-          <PlusCircle className="w-4 h-4" />
-          Add Investment
-        </Button>
+        <div className="flex gap-2 self-start sm:self-auto">
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={loading} title="Refresh">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button onClick={openAdd} className="gap-2">
+            <PlusCircle className="w-4 h-4" />
+            Add Investment
+          </Button>
+        </div>
       </div>
+
+      {/* Success banner */}
+      {successMsg && (
+        <div className="flex items-center gap-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 text-sm">
+          {successMsg}
+        </div>
+      )}
+
+      {/* Store error banner */}
+      {storeError && (
+        <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 text-sm">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          {storeError}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -212,8 +286,17 @@ export default function InvestmentsPage() {
         </Card>
       </div>
 
-      {/* Charts + Holdings */}
-      {investments.length === 0 ? (
+      {/* Loading skeleton */}
+      {loading && investments.length === 0 && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && investments.length === 0 && (
         <Card className="border-dashed border-2 bg-transparent">
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4 text-gray-400">
             <Briefcase className="w-12 h-12 opacity-30" />
@@ -224,7 +307,10 @@ export default function InvestmentsPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      )}
+
+      {/* Charts + Holdings */}
+      {investments.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-5">
           {/* Allocation Pie */}
           <Card className="lg:col-span-2">
@@ -245,6 +331,8 @@ export default function InvestmentsPage() {
                     outerRadius={95}
                     paddingAngle={3}
                     dataKey="value"
+                    animationBegin={0}
+                    animationDuration={600}
                   >
                     {allocationData.map((entry) => (
                       <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || "#94a3b8"} />
@@ -264,63 +352,62 @@ export default function InvestmentsPage() {
               <CardDescription>Individual investment performance</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {loading ? (
-                [1, 2, 3].map((i) => (
-                  <div key={i} className="h-14 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
-                ))
-              ) : (
-                investments.map((inv) => {
-                  const roi = inv.amountInvested > 0
-                    ? ((inv.currentValue - inv.amountInvested) / inv.amountInvested) * 100
-                    : 0;
-                  const gainLoss = inv.currentValue - inv.amountInvested;
-                  const isUp = gainLoss >= 0;
+              {investments.map((inv) => {
+                const roi = inv.amountInvested > 0
+                  ? ((inv.currentValue - inv.amountInvested) / inv.amountInvested) * 100
+                  : 0;
+                const gainLoss = inv.currentValue - inv.amountInvested;
+                const isUp = gainLoss >= 0;
 
-                  return (
-                    <div
-                      key={inv.id}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ background: TYPE_COLORS[inv.type] }}
-                        />
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{inv.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {inv.type} • {format(new Date(inv.purchaseDate), "dd MMM yyyy")}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 flex-shrink-0">
-                        <div className="text-right">
-                          <p className="font-semibold text-sm">₹{inv.currentValue.toLocaleString()}</p>
-                          <p className={`text-xs flex items-center justify-end gap-0.5 ${isUp ? "text-green-600" : "text-red-500"}`}>
-                            {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                            {roi.toFixed(1)}%
-                          </p>
-                        </div>
-                        <div className="hidden group-hover:flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(inv)}>
-                            <Pencil className="w-3 h-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(inv.id)}>
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
+                return (
+                  <div
+                    key={inv.id}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ background: TYPE_COLORS[inv.type] }}
+                      />
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{inv.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {inv.type} • {inv.purchaseDate ? format(new Date(inv.purchaseDate), "dd MMM yyyy") : "—"}
+                        </p>
                       </div>
                     </div>
-                  );
-                })
-              )}
+                    <div className="flex items-center gap-4 flex-shrink-0">
+                      <div className="text-right">
+                        <p className="font-semibold text-sm">₹{(inv.currentValue || 0).toLocaleString()}</p>
+                        <p className={`text-xs flex items-center justify-end gap-0.5 ${isUp ? "text-green-600" : "text-red-500"}`}>
+                          {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                          {roi.toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="hidden group-hover:flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(inv)}>
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => handleDelete(inv.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         </div>
       )}
 
       {/* Add / Edit Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setFormError(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Investment" : "Add Investment"}</DialogTitle>
@@ -328,6 +415,14 @@ export default function InvestmentsPage() {
               {editing ? "Update your investment details." : "Track a new investment in your portfolio."}
             </DialogDescription>
           </DialogHeader>
+
+          {/* Inline form error */}
+          {formError && (
+            <div className="flex items-start gap-2 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-3 py-2 text-sm">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              {formError}
+            </div>
+          )}
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -394,10 +489,12 @@ export default function InvestmentsPage() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
             <Button
               onClick={handleSubmit}
-              disabled={saving || !form.name || !form.amountInvested || !form.purchaseDate}
+              disabled={saving || !form.name.trim() || !form.amountInvested || !form.purchaseDate}
             >
               {saving ? "Saving…" : editing ? "Save Changes" : "Add Investment"}
             </Button>
@@ -407,4 +504,3 @@ export default function InvestmentsPage() {
     </div>
   );
 }
-

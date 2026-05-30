@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── investments ──────────────────────────────────────────────────────────
+    match /investments/{investmentId} {
+      // Read own investments
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.userId;
+
+      // Create: use request.resource (document doesn't exist yet)
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.userId;
+
+      // Update / Delete: use resource (document already exists)
+      allow update, delete: if request.auth != null
+                            && request.auth.uid == resource.data.userId;
+    }
+
+    // ── wallets ──────────────────────────────────────────────────────────────
+    match /wallets/{walletId} {
+      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ── transactions ─────────────────────────────────────────────────────────
+    match /transactions/{txId} {
+      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ── savings goals ────────────────────────────────────────────────────────
+    match /savingsGoals/{goalId} {
+      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ── loans ────────────────────────────────────────────────────────────────
+    match /loans/{loanId} {
+      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ── fixed deposits ───────────────────────────────────────────────────────
+    match /fixedDeposits/{fdId} {
+      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ── savings accounts ─────────────────────────────────────────────────────
+    match /savingsAccounts/{saId} {
+      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ── budgets ──────────────────────────────────────────────────────────────
+    match /budgets/{budgetId} {
+      allow read:   if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // ── users (profiles) ─────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+  }
+}

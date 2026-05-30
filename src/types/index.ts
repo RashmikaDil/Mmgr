@@ -73,11 +73,14 @@ export interface SavingsGoal {
 export interface Investment {
   id: string;
   userId: string;
+  familyId?: string;
   name: string;
+  symbol?: string;          // e.g. "BTC", "ETH", "RELIANCE"
   type: 'Stocks' | 'Mutual Funds' | 'Crypto' | 'Gold' | 'Other';
   amountInvested: number;
   currentValue: number;
   purchaseDate: string;
+  createdAt: string;
 }
 
 /** A single tier rule: if balance/principal exceeds `aboveAmount`, apply `rate` */
