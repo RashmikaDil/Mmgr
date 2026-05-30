@@ -13,7 +13,7 @@ export default function GoalsPage() {
 
   useEffect(() => {
     if (user?.uid) {
-      fetchGoals(user.uid, user.familyId);
+      fetchGoals(user.uid, (user as any).familyId);
     }
   }, [user]);
 
