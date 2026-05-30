@@ -57,7 +57,7 @@ export function BudgetModal({ isOpen, onClose, budgetToEdit }: BudgetModalProps)
   const currentYear = new Date().getFullYear();
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<BudgetFormValues>({
-    resolver: zodResolver(budgetSchema),
+    resolver: zodResolver(budgetSchema) as any,
     defaultValues: {
       categoryId: CATEGORIES[0].id,
       amount: 0,
@@ -116,7 +116,7 @@ export function BudgetModal({ isOpen, onClose, budgetToEdit }: BudgetModalProps)
           <div className="space-y-2">
             <Label htmlFor="categoryId">Category</Label>
             <Select 
-              onValueChange={(value) => setValue("categoryId", value)} 
+              onValueChange={(value) => setValue("categoryId", value || "")} 
               value={watch("categoryId")}
             >
               <SelectTrigger>
@@ -141,7 +141,7 @@ export function BudgetModal({ isOpen, onClose, budgetToEdit }: BudgetModalProps)
             <div className="space-y-2">
               <Label htmlFor="month">Month</Label>
               <Select 
-                onValueChange={(value) => setValue("month", parseInt(value))} 
+                onValueChange={(value) => setValue("month", parseInt(value || "0"))} 
                 value={watch("month").toString()}
               >
                 <SelectTrigger>

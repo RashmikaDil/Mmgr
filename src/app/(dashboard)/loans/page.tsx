@@ -367,7 +367,7 @@ export default function LoansPage() {
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
-                      formatter={(value: number, name: string) => [
+                      formatter={(value: any, name: any) => [
                         `₹${value.toLocaleString()}`,
                         name === "principal" ? "Principal" : "Interest",
                       ]}

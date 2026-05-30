@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { getDocs, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { transferMoney } from "@/services/transferService";
 
 interface Wallet { id: string; name: string; balance: number; }
 interface FixedDeposit { id: string; name: string; principal: number; }
@@ -115,7 +116,7 @@ export default function TransferPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleTransfer} className="grid gap-4">
-            <Select value={sourceWalletId} onValueChange={setSourceWalletId} required>
+            <Select value={sourceWalletId} onValueChange={(v) => setSourceWalletId(v || "")} required>
               <SelectItem disabled value="">
                 Select Source Wallet
               </SelectItem>
@@ -126,14 +127,14 @@ export default function TransferPage() {
               ))}
             </Select>
 
-            <Select value={destType} onValueChange={setDestType} required>
+            <Select value={destType} onValueChange={(v) => setDestType(v || "")} required>
               <SelectItem value="wallet">Wallet</SelectItem>
               <SelectItem value="fixedDeposit">Fixed Deposit</SelectItem>
               <SelectItem value="savingsAccount">Savings Account</SelectItem>
               <SelectItem value="investment">Investment</SelectItem>
             </Select>
 
-            <Select value={destId} onValueChange={setDestId} required>
+            <Select value={destId} onValueChange={(v) => setDestId(v || "")} required>
               <SelectItem disabled value="">
                 Select Destination
               </SelectItem>

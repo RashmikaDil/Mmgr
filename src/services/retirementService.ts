@@ -1,5 +1,5 @@
 import { collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/lib/firebase';
 import { RetirementAccount } from '@/types';
 
 export const retirementService = {

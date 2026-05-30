@@ -47,7 +47,7 @@ export function IncomeExpenseChart({ transactions }: IncomeExpenseChartProps) {
         <Tooltip 
           cursor={{ fill: 'rgba(0,0,0,0.05)' }} 
           contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-          formatter={(value: number) => [`$${value.toFixed(2)}`, undefined]}
+          formatter={(value: any) => [`$${Number(value).toFixed(2)}`, undefined]}
         />
         <Legend wrapperStyle={{ fontSize: '12px' }} />
         <Bar dataKey="income" name="Income" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={40} />

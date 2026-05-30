@@ -22,7 +22,7 @@ export const savingsAccountService = {
     snapshot.forEach(docSnap => {
       const data = docSnap.data() as SavingsAccount;
       if (!familyId || data.familyId === familyId) {
-        accounts.push({ id: docSnap.id, ...data });
+        accounts.push({ ...data, id: docSnap.id });
       }
     });
     return accounts;

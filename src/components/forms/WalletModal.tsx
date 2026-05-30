@@ -37,7 +37,7 @@ export function WalletModal({ isOpen, onClose, walletToEdit }: WalletModalProps)
   const [error, setError] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<WalletFormValues>({
-    resolver: zodResolver(walletSchema),
+    resolver: zodResolver(walletSchema) as any,
     defaultValues: {
       name: "",
       type: "Bank Account",
@@ -101,7 +101,7 @@ export function WalletModal({ isOpen, onClose, walletToEdit }: WalletModalProps)
           <div className="space-y-2">
             <Label htmlFor="type">Wallet Type</Label>
             <Select 
-              onValueChange={(value) => setValue("type", value as WalletType)} 
+              onValueChange={(value) => setValue("type", (value || "Bank Account") as WalletType)} 
               defaultValue={walletToEdit?.type || "Bank Account"}
             >
               <SelectTrigger>

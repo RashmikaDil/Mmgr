@@ -5,7 +5,7 @@ export function CurrencySwitcher() {
   const { currency, setCurrency } = useCurrency();
 
   return (
-    <Select value={currency} onValueChange={setCurrency}>
+    <Select value={currency} onValueChange={(v) => setCurrency(v || "")}>
       <SelectTrigger className="w-[100px]">
         <SelectValue placeholder="Currency" />
       </SelectTrigger>

@@ -18,7 +18,7 @@ export const loanService = {
     snapshot.forEach(docSnap => {
       const data = docSnap.data() as Loan;
       if (!familyId || data.familyId === familyId) {
-        loans.push({ id: docSnap.id, ...data });
+        loans.push({ ...data, id: docSnap.id });
       }
     });
     return loans;

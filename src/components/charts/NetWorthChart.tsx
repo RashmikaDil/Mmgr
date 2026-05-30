@@ -25,7 +25,7 @@ export function NetWorthChart() {
         <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
         <XAxis dataKey="month" tick={{ fontSize: 11 }} />
         <YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-        <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
+        <Tooltip formatter={(value: any) => `₹${Number(value).toLocaleString()}`} />
         <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} />
       </AreaChart>
     </ResponsiveContainer>

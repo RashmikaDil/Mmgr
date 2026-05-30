@@ -49,7 +49,7 @@ export const investmentService = {
     snap.forEach((d) => {
       const data = d.data() as Investment;
       if (!familyId || data.familyId === familyId) {
-        list.push({ id: d.id, ...data });
+        list.push({ ...data, id: d.id });
       }
     });
     console.log('[investmentService] Fetched', list.length, 'investments');

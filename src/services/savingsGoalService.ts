@@ -1,4 +1,4 @@
-import { collection, addDoc, doc, getDocs, query, where, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, getDocs, query, where, updateDoc, deleteDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { SavingsGoal } from '@/types';
 
@@ -18,7 +18,7 @@ export const savingsGoalService = {
     snapshot.forEach((docSnap) => {
       const data = docSnap.data() as SavingsGoal;
       if (!familyId || data.familyId === familyId) {
-        goals.push({ id: docSnap.id, ...data });
+        goals.push({ ...data, id: docSnap.id });
       }
     });
     return goals;
@@ -36,7 +36,7 @@ export const savingsGoalService = {
 
   async get(id: string): Promise<SavingsGoal> {
     const docRef = doc(db, 'savingsGoals', id);
-    const snap = await getDocs(docRef);
+    const snap = await getDoc(docRef);
     if (!snap.exists()) throw new Error('SavingsGoal not found');
     return { id: snap.id, ...snap.data() } as SavingsGoal;
   },

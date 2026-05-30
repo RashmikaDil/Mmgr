@@ -66,7 +66,7 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
   const [error, setError] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<TransactionFormValues>({
-    resolver: zodResolver(transactionSchema),
+    resolver: zodResolver(transactionSchema) as any,
     defaultValues: {
       type: defaultType,
       date: new Date().toISOString().split('T')[0],
@@ -184,7 +184,7 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
           <div className="space-y-2">
             <Label htmlFor="walletId">Wallet</Label>
             <Select 
-              onValueChange={(value) => setValue("walletId", value)} 
+              onValueChange={(value) => setValue("walletId", value || "")} 
               value={watch("walletId")}
             >
               <SelectTrigger>
@@ -202,7 +202,7 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
           <div className="space-y-2">
             <Label htmlFor="categoryId">Category</Label>
             <Select 
-              onValueChange={(value) => setValue("categoryId", value)} 
+              onValueChange={(value) => setValue("categoryId", value || "")} 
               value={watch("categoryId")}
             >
               <SelectTrigger>
