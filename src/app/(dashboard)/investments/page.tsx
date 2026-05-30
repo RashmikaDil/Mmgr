@@ -40,6 +40,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 interface FormState {
   name: string;
+  symbol: string;
   type: Investment["type"];
   amountInvested: string;
   currentValue: string;
@@ -48,6 +49,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   name: "",
+  symbol: "",
   type: "Stocks",
   amountInvested: "",
   currentValue: "",
@@ -124,6 +126,7 @@ export default function InvestmentsPage() {
     setEditing(inv);
     setForm({
       name: inv.name,
+      symbol: inv.symbol || "",
       type: inv.type,
       amountInvested: String(inv.amountInvested),
       currentValue: String(inv.currentValue),
@@ -148,6 +151,7 @@ export default function InvestmentsPage() {
     const payload = {
       userId: user.uid,
       name: form.name.trim(),
+      symbol: form.type === "Crypto" ? form.symbol.trim().toUpperCase() : undefined,
       type: form.type,
       amountInvested: parseFloat(form.amountInvested),
       currentValue: parseFloat(form.currentValue),
@@ -372,7 +376,7 @@ export default function InvestmentsPage() {
                       <div className="min-w-0">
                         <p className="font-medium text-sm truncate">{inv.name}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {inv.type} • {inv.purchaseDate ? format(new Date(inv.purchaseDate), "dd MMM yyyy") : "—"}
+                          {inv.type}{inv.symbol ? ` (${inv.symbol})` : ""} • {inv.purchaseDate ? format(new Date(inv.purchaseDate), "dd MMM yyyy") : "—"}
                         </p>
                       </div>
                     </div>
@@ -451,6 +455,18 @@ export default function InvestmentsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {form.type === "Crypto" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="inv-symbol">Crypto Ticker Symbol</Label>
+                <Input
+                  id="inv-symbol"
+                  placeholder="e.g. BTC, ETH, SOL…"
+                  value={form.symbol}
+                  onChange={(e) => setForm({ ...form, symbol: e.target.value.toUpperCase() })}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">

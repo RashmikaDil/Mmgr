@@ -1,5 +1,7 @@
+"use client";
+
 import React, { useEffect } from 'react';
-import { useAuth } from '@/app/(dashboard)/authProvider'; // assume auth hook
+import { useAuth } from '@/hooks/useAuth';
 import { useSavingsGoalStore } from '@/store/savingsGoalStore';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
