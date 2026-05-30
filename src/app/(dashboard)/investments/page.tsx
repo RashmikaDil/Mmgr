@@ -342,7 +342,7 @@ export default function InvestmentsPage() {
                       <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || "#94a3b8"} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                  <Tooltip formatter={(v: any) => `₹${Number(v).toLocaleString()}`} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
