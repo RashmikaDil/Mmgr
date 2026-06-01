@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wallet, ArrowRightLeft, Target, FileText, Settings, LogOut, Landmark, Banknote, PiggyBank, TrendingUp, DollarSign, Briefcase, CalendarClock, BellRing, } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowRightLeft, Target, FileText, Settings, LogOut, Landmark, Banknote, PiggyBank, TrendingUp, DollarSign, Briefcase, CalendarClock, BellRing, CreditCard } from "lucide-react";
 import { authService } from "@/services/authService";
 import { useRouter } from "next/navigation";
 
@@ -10,6 +10,7 @@ const navItems = [
   { name: "Dashboard",        href: "/dashboard",        icon: LayoutDashboard },
   { name: "Wallets",          href: "/wallets",          icon: Wallet },
   { name: "Transactions",     href: "/transactions",     icon: ArrowRightLeft },
+  { name: "ATM / CDM",        href: "/atm-cdm",          icon: CreditCard },
   { name: "Budgets",          href: "/budgets",          icon: Target },
 ];
 
