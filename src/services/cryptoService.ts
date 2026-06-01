@@ -47,3 +47,34 @@ export async function fetchCryptoPricesUSD(
   if (!res.ok) throw new Error(`CoinGecko error ${res.status}`);
   return res.json();
 }
+
+/** Fetch historical price of a coin closest to the given timestamp using CoinGecko */
+export async function fetchCryptoPriceAtTimestamp(coinId: string, timestampMs: number): Promise<number | null> {
+  const from = Math.floor((timestampMs - 86400000 * 3) / 1000); // 3 days before
+  const to = Math.floor((timestampMs + 86400000 * 3) / 1000);   // 3 days after
+  const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart/range?vs_currency=usd&from=${from}&to=${to}`;
+  
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.prices || data.prices.length === 0) return null;
+    
+    // Find the closest data point
+    let closestPrice = data.prices[0][1];
+    let minDiff = Math.abs(data.prices[0][0] - timestampMs);
+    
+    for (const [ts, price] of data.prices) {
+      const diff = Math.abs(ts - timestampMs);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestPrice = price;
+      }
+    }
+    return closestPrice;
+  } catch (e) {
+    console.error("Error fetching historical price:", e);
+    return null;
+  }
+}
+

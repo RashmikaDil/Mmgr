@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCryptoStore } from "@/store/cryptoStore";
 import { useCurrency } from "@/context/CurrencyContext";
-import { fetchCryptoPricesUSD, type CoinPrice } from "@/services/cryptoService";
+import { fetchCryptoPricesUSD, fetchCryptoPriceAtTimestamp, type CoinPrice } from "@/services/cryptoService";
 import type { CryptoHolding } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,13 @@ const COIN_COLORS: Record<string, string> = {
   "shiba-inu": "#ffa409", litecoin: "#bfbbbb", uniswap: "#ff007a",
 };
 
-const EMPTY_FORM = { selectedCoinId: "", customId: "", name: "", symbol: "", quantity: "", totalInvested: "", purchaseDate: new Date().toISOString().slice(0, 10) };
+const getLocalISOString = () => {
+  const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+  const localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
+  return localISOTime;
+};
+
+const EMPTY_FORM = { selectedCoinId: "", customId: "", name: "", symbol: "", quantity: "", totalInvested: "", purchaseDate: getLocalISOString() };
 
 export default function CryptoPage() {
   const { user } = useAuth();
@@ -156,7 +162,7 @@ export default function CryptoPage() {
       symbol: h.symbol,
       quantity: String(h.quantity),
       totalInvested: h.totalInvestedUSD !== undefined ? String((h.totalInvestedUSD * (exchangeRates[currency] || 1)).toFixed(2)) : "",
-      purchaseDate: h.purchaseDate,
+      purchaseDate: h.purchaseDate.includes("T") ? h.purchaseDate.slice(0, 16) : `${h.purchaseDate}T12:00`,
     });
     setFormError(null);
     setDialogOpen(true);
@@ -182,15 +188,42 @@ export default function CryptoPage() {
     const qty = parseFloat(form.quantity);
     if (isNaN(qty) || qty <= 0) { setFormError("Quantity must be a positive number."); return; }
 
+    setSaving(true);
+    setFormError(null);
+
     let totalInvestedUSD: number | undefined = undefined;
     if (form.totalInvested.trim() !== "") {
       const invested = parseFloat(form.totalInvested);
-      if (isNaN(invested) || invested < 0) { setFormError("Total invested must be a valid positive number."); return; }
+      if (isNaN(invested) || invested < 0) {
+        setFormError("Total invested must be a valid positive number.");
+        setSaving(false);
+        return;
+      }
       totalInvestedUSD = invested / (exchangeRates[currency] || 1);
+    } else {
+      // Auto-calculate from bought date and time using CoinGecko!
+      try {
+        const timestampMs = new Date(form.purchaseDate).getTime();
+        if (isNaN(timestampMs)) {
+          setFormError("Invalid purchase date and time.");
+          setSaving(false);
+          return;
+        }
+        const priceAtTime = await fetchCryptoPriceAtTimestamp(effectiveCoinId, timestampMs);
+        if (priceAtTime !== null) {
+          totalInvestedUSD = priceAtTime * qty;
+        } else {
+          setFormError("Could not fetch historical price for this date/time. Please enter Total Invested manually.");
+          setSaving(false);
+          return;
+        }
+      } catch (e: any) {
+        setFormError("Failed to fetch historical price: " + (e.message || e));
+        setSaving(false);
+        return;
+      }
     }
 
-    setSaving(true);
-    setFormError(null);
     const payload = {
       userId: user.uid,
       coinId: effectiveCoinId,
@@ -471,8 +504,8 @@ export default function CryptoPage() {
                   value={form.totalInvested} onChange={(e) => setForm((f) => ({ ...f, totalInvested: e.target.value }))} />
               </div>
               <div className="space-y-1.5 col-span-2">
-                <Label htmlFor="coin-date">Purchase Date</Label>
-                <Input id="coin-date" type="date" value={form.purchaseDate}
+                <Label htmlFor="coin-date">Purchase Date & Time</Label>
+                <Input id="coin-date" type="datetime-local" value={form.purchaseDate}
                   onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value }))} />
               </div>
             </div>
