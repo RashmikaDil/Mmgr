@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSavingsGoalStore } from "@/store/savingsGoalStore";
+import { useCurrency } from "@/context/CurrencyContext";
 import { SavingsGoal } from "@/types";
 import {
   Card,
@@ -53,6 +54,7 @@ export default function SavingsPage() {
   const { user } = useAuth();
   const { goals, loading, fetchGoals, addGoal, updateGoal, deleteGoal } =
     useSavingsGoalStore();
+  const { currency, formatPrice } = useCurrency();
 
   const [open, setOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
@@ -138,7 +140,7 @@ export default function SavingsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-              ₹{totalSaved.toLocaleString()}
+              {formatPrice(totalSaved)}
             </div>
             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">across all goals</p>
           </CardContent>
@@ -149,7 +151,7 @@ export default function SavingsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-              ₹{totalTarget.toLocaleString()}
+              {formatPrice(totalTarget)}
             </div>
             <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">combined target</p>
           </CardContent>
@@ -239,11 +241,11 @@ export default function SavingsPage() {
                   <div className="flex justify-between text-sm">
                     <div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">Saved</div>
-                      <div className="font-semibold text-green-600">₹{goal.currentAmount.toLocaleString()}</div>
+                      <div className="font-semibold text-green-600">{formatPrice(goal.currentAmount)}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-gray-500 dark:text-gray-400">Target</div>
-                      <div className="font-semibold">₹{goal.targetAmount.toLocaleString()}</div>
+                      <div className="font-semibold">{formatPrice(goal.targetAmount)}</div>
                     </div>
                   </div>
 
@@ -251,7 +253,7 @@ export default function SavingsPage() {
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                       <span>{pct.toFixed(1)}% complete</span>
-                      {!isComplete && <span>₹{remaining.toLocaleString()} left</span>}
+                      {!isComplete && <span>{formatPrice(remaining)} left</span>}
                     </div>
                     <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 overflow-hidden">
                       <div
@@ -322,7 +324,7 @@ export default function SavingsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="target-amount">Target Amount (₹)</Label>
+                <Label htmlFor="target-amount">Target Amount ({currency})</Label>
                 <Input
                   id="target-amount"
                   type="number"
@@ -333,7 +335,7 @@ export default function SavingsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="current-amount">Saved So Far (₹)</Label>
+                <Label htmlFor="current-amount">Saved So Far ({currency})</Label>
                 <Input
                   id="current-amount"
                   type="number"

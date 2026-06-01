@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, Wallet as WalletIcon, MoreVertical, Edit, Trash } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWalletStore } from "@/store/walletStore";
+import { useCurrency } from "@/context/CurrencyContext";
 import { Wallet } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { WalletModal } from "@/components/forms/WalletModal";
 export default function WalletsPage() {
   const { user } = useAuth();
   const { wallets, loading, fetchWallets, removeWallet } = useWalletStore();
+  const { formatPrice } = useCurrency();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [walletToEdit, setWalletToEdit] = useState<Wallet | null>(null);
@@ -102,7 +104,7 @@ export default function WalletsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold mt-2">
-                  {wallet.balance.toLocaleString('en-US', { style: 'currency', currency: wallet.currency })}
+                  {formatPrice(wallet.balance)}
                 </div>
                 <div className="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
               </CardContent>

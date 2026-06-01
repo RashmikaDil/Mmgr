@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useInvestmentStore } from "@/store/investmentStore";
+import { useCurrency } from "@/context/CurrencyContext";
 import type { Investment } from "@/types";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -77,6 +78,7 @@ export default function InvestmentsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const { currency, formatPrice } = useCurrency();
 
   // Load investments on mount / when user changes
   useEffect(() => {
@@ -237,7 +239,7 @@ export default function InvestmentsPage() {
             <CardTitle className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Total Invested</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">₹{totalInvested.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">{formatPrice(totalInvested)}</div>
             <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{investments.length} holdings</p>
           </CardContent>
         </Card>
@@ -247,7 +249,7 @@ export default function InvestmentsPage() {
             <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Current Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">₹{totalCurrent.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{formatPrice(totalCurrent)}</div>
             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">portfolio value</p>
           </CardContent>
         </Card>
@@ -263,7 +265,7 @@ export default function InvestmentsPage() {
           <CardContent>
             <div className={`text-2xl font-bold flex items-center gap-1 ${totalGainLoss >= 0 ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"}`}>
               {totalGainLoss >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-              ₹{Math.abs(totalGainLoss).toLocaleString()}
+              {formatPrice(Math.abs(totalGainLoss))}
             </div>
             <p className={`text-xs mt-1 ${totalGainLoss >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
               overall {totalGainLoss >= 0 ? "profit" : "loss"}
@@ -342,7 +344,7 @@ export default function InvestmentsPage() {
                       <Cell key={entry.name} fill={TYPE_COLORS[entry.name] || "#94a3b8"} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: any) => `₹${Number(v).toLocaleString()}`} />
+                  <Tooltip formatter={(v: any) => `${formatPrice(Number(v))}`} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -382,7 +384,7 @@ export default function InvestmentsPage() {
                     </div>
                     <div className="flex items-center gap-4 flex-shrink-0">
                       <div className="text-right">
-                        <p className="font-semibold text-sm">₹{(inv.currentValue || 0).toLocaleString()}</p>
+                        <p className="font-semibold text-sm">{formatPrice(inv.currentValue || 0)}</p>
                         <p className={`text-xs flex items-center justify-end gap-0.5 ${isUp ? "text-green-600" : "text-red-500"}`}>
                           {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                           {roi.toFixed(1)}%
@@ -470,7 +472,7 @@ export default function InvestmentsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="inv-invested">Amount Invested (₹)</Label>
+                <Label htmlFor="inv-invested">Amount Invested ({currency})</Label>
                 <Input
                   id="inv-invested"
                   type="number"
@@ -481,7 +483,7 @@ export default function InvestmentsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="inv-current">Current Value (₹)</Label>
+                <Label htmlFor="inv-current">Current Value ({currency})</Label>
                 <Input
                   id="inv-current"
                   type="number"

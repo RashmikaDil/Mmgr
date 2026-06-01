@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Transaction } from '@/types';
+import { useCurrency } from '@/context/CurrencyContext';
 
 interface CategoryPieChartProps {
   transactions: Transaction[];
@@ -20,6 +21,7 @@ const CATEGORY_NAMES: Record<string, string> = {
 const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 export function CategoryPieChart({ transactions, type }: CategoryPieChartProps) {
+  const { formatPrice } = useCurrency();
   const data = useMemo(() => {
     const filtered = transactions.filter(t => t.type === type);
     
@@ -65,7 +67,7 @@ export function CategoryPieChart({ transactions, type }: CategoryPieChartProps) 
           ))}
         </Pie>
         <Tooltip 
-          formatter={(value: any) => [`$${Number(value).toFixed(2)}`, undefined]}
+          formatter={(value: any) => [`${formatPrice(Number(value))}`, undefined]}
           contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
         />
         <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px' }}/>

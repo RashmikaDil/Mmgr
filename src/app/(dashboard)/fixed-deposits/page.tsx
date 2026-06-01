@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useFixedDepositStore } from "@/store/fixedDepositStore";
+import { useCurrency } from "@/context/CurrencyContext";
 import { FixedDeposit, InterestTier } from "@/types";
 import {
   Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
@@ -96,6 +97,7 @@ export default function FixedDepositsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [tiers, setTiers] = useState<InterestTier[]>([]);
   const [saving, setSaving] = useState(false);
+  const { currency, formatPrice } = useCurrency();
 
   useEffect(() => {
     if (user?.uid) fetchDeposits(user.uid);
@@ -198,21 +200,21 @@ export default function FixedDepositsPage() {
         <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border-indigo-200 dark:border-indigo-800">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Total Principal</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">₹{totalPrincipal.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">{formatPrice(totalPrincipal)}</div>
             <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{deposits.length} deposits</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Maturity Value</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">₹{Math.round(totalMaturity).toLocaleString()}</div>
+            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{formatPrice(Math.round(totalMaturity))}</div>
             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">projected at maturity</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Total Interest</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-900 dark:text-green-100">₹{Math.round(totalInterest).toLocaleString()}</div>
+            <div className="text-2xl font-bold text-green-900 dark:text-green-100">{formatPrice(Math.round(totalInterest))}</div>
             <p className="text-xs text-green-600 dark:text-green-400 mt-1">projected earnings</p>
           </CardContent>
         </Card>
@@ -276,11 +278,11 @@ export default function FixedDepositsPage() {
                   <div className="flex justify-between">
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Principal</p>
-                      <p className="font-semibold">₹{fd.principal.toLocaleString()}</p>
+                      <p className="font-semibold">{formatPrice(fd.principal)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Maturity Value</p>
-                      <p className="font-semibold text-green-600">₹{Math.round(maturity).toLocaleString()}</p>
+                      <p className="font-semibold text-green-600">{formatPrice(Math.round(maturity))}</p>
                     </div>
                   </div>
 
@@ -303,7 +305,7 @@ export default function FixedDepositsPage() {
                   {/* Interest earned */}
                   <div className="bg-green-50 dark:bg-green-900/20 rounded-md px-3 py-2 flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Interest Earned</span>
-                    <span className="font-medium text-green-700 dark:text-green-300">+₹{Math.round(interest).toLocaleString()}</span>
+                    <span className="font-medium text-green-700 dark:text-green-300">+{formatPrice(Math.round(interest))}</span>
                   </div>
 
                   {/* Dates */}
@@ -326,7 +328,7 @@ export default function FixedDepositsPage() {
                   )}
 
                   {fd.minimumDeposit && (
-                    <p className="text-xs text-gray-400">Min. deposit: ₹{fd.minimumDeposit.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">Min. deposit: {formatPrice(fd.minimumDeposit)}</p>
                   )}
                 </CardContent>
 
@@ -372,12 +374,12 @@ export default function FixedDepositsPage() {
             {/* Principal + Min Deposit */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="fd-principal">Principal (₹) *</Label>
+                <Label htmlFor="fd-principal">Principal ({currency}) *</Label>
                 <Input id="fd-principal" type="number" min="0" placeholder="50000" value={form.principal}
                   onChange={(e) => setForm({ ...form, principal: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="fd-mindeposit">Min. Deposit (₹)</Label>
+                <Label htmlFor="fd-mindeposit">Min. Deposit ({currency})</Label>
                 <Input id="fd-mindeposit" type="number" min="0" placeholder="1000" value={form.minimumDeposit}
                   onChange={(e) => setForm({ ...form, minimumDeposit: e.target.value })} />
               </div>
@@ -456,7 +458,7 @@ export default function FixedDepositsPage() {
               {tiers.map((tier, idx) => (
                 <div key={idx} className="flex items-center gap-2 p-2 rounded-md border bg-gray-50 dark:bg-gray-800/50">
                   <div className="flex-1 space-y-1">
-                    <Label className="text-xs">Above (₹)</Label>
+                    <Label className="text-xs">Above ({currency})</Label>
                     <Input type="number" min="0" placeholder="10000" value={tier.aboveAmount || ""}
                       onChange={(e) => updateTier(idx, "aboveAmount", e.target.value)}
                       className="h-8 text-sm" />
@@ -502,11 +504,11 @@ export default function FixedDepositsPage() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-gray-400">Maturity Value</span>
-                        <span className="font-semibold text-green-700 dark:text-green-300">₹{Math.round(mat).toLocaleString()}</span>
+                        <span className="font-semibold text-green-700 dark:text-green-300">{formatPrice(Math.round(mat))}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-gray-400">Interest Earned</span>
-                        <span className="font-medium text-green-600">+₹{Math.round(mat - (parseFloat(form.principal) || 0)).toLocaleString()}</span>
+                        <span className="font-medium text-green-600">+{formatPrice(Math.round(mat - (parseFloat(form.principal) || 0)))}</span>
                       </div>
                     </>
                   );

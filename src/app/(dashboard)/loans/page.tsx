@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLoanStore } from "@/store/loanStore";
+import { useCurrency } from "@/context/CurrencyContext";
 import { Loan } from "@/types";
 import {
   Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
@@ -94,6 +95,7 @@ export default function LoansPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const { currency, formatPrice } = useCurrency();
 
   useEffect(() => {
     if (user?.uid) fetchLoans(user.uid);
@@ -204,21 +206,21 @@ export default function LoansPage() {
         <Card className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/20 border-red-200 dark:border-red-800">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-700 dark:text-red-300">Total Debt</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-900 dark:text-red-100">₹{totalDebt.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-red-900 dark:text-red-100">{formatPrice(totalDebt)}</div>
             <p className="text-xs text-red-600 dark:text-red-400 mt-1">remaining balance</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/20 border-orange-200 dark:border-orange-800">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">Monthly EMI</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-900 dark:text-orange-100">₹{Math.round(totalMonthlyEMI).toLocaleString()}</div>
+            <div className="text-2xl font-bold text-orange-900 dark:text-orange-100">{formatPrice(Math.round(totalMonthlyEMI))}</div>
             <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">across active loans</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/30 dark:to-amber-800/20 border-amber-200 dark:border-amber-800">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-amber-700 dark:text-amber-300">Total Interest Cost</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">₹{Math.round(totalInterestCost).toLocaleString()}</div>
+            <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">{formatPrice(Math.round(totalInterestCost))}</div>
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">over full terms</p>
           </CardContent>
         </Card>
@@ -287,12 +289,12 @@ export default function LoansPage() {
                     <div className="flex justify-between text-sm">
                       <div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Principal</p>
-                        <p className="font-semibold">₹{loan.principal.toLocaleString()}</p>
+                        <p className="font-semibold">{formatPrice(loan.principal)}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500 dark:text-gray-400">Remaining</p>
                         <p className={`font-semibold ${loan.remainingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-                          ₹{loan.remainingBalance.toLocaleString()}
+                          {formatPrice(loan.remainingBalance)}
                         </p>
                       </div>
                     </div>
@@ -301,7 +303,7 @@ export default function LoansPage() {
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                         <span>{paidPct.toFixed(1)}% repaid</span>
-                        <span>EMI: ₹{Math.round(loan.monthlyPayment).toLocaleString()}/mo</span>
+                        <span>EMI: {formatPrice(Math.round(loan.monthlyPayment))}/mo</span>
                       </div>
                       <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
                         <div
@@ -368,7 +370,7 @@ export default function LoansPage() {
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
                       formatter={(value: any, name: any) => [
-                        `₹${value.toLocaleString()}`,
+                        `${formatPrice(value)}`,
                         name === "principal" ? "Principal" : "Interest",
                       ]}
                     />
@@ -413,12 +415,12 @@ export default function LoansPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="loan-principal">Loan Amount (₹) *</Label>
+                <Label htmlFor="loan-principal">Loan Amount ({currency}) *</Label>
                 <Input id="loan-principal" type="number" min="0" placeholder="500000" value={form.principal}
                   onChange={(e) => setForm({ ...form, principal: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="loan-remaining">Remaining Balance (₹)</Label>
+                <Label htmlFor="loan-remaining">Remaining Balance ({currency})</Label>
                 <Input id="loan-remaining" type="number" min="0" placeholder="auto-filled" value={form.remainingBalance}
                   onChange={(e) => setForm({ ...form, remainingBalance: e.target.value })} />
               </div>
@@ -468,18 +470,18 @@ export default function LoansPage() {
                 <p className="text-xs font-medium text-red-700 dark:text-red-300">EMI Preview</p>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Monthly EMI</span>
-                  <span className="font-bold text-red-700 dark:text-red-300">₹{Math.round(previewEMI!).toLocaleString()}</span>
+                  <span className="font-bold text-red-700 dark:text-red-300">{formatPrice(Math.round(previewEMI!))}</span>
                 </div>
                 {previewTotalCost && (
                   <>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600 dark:text-gray-400">Total Payment</span>
-                      <span className="font-medium">₹{Math.round(previewTotalCost).toLocaleString()}</span>
+                      <span className="font-medium">{formatPrice(Math.round(previewTotalCost))}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600 dark:text-gray-400">Total Interest</span>
                       <span className="font-medium text-orange-600">
-                        ₹{Math.round(previewTotalCost - (parseFloat(form.principal) || 0)).toLocaleString()}
+                        {formatPrice(Math.round(previewTotalCost - (parseFloat(form.principal) || 0)))}
                       </span>
                     </div>
                   </>

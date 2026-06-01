@@ -11,9 +11,9 @@ import {
   Info,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { getDocs, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { transferMoney } from "@/services/transferService";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   Card,
   CardContent,
@@ -63,6 +63,7 @@ export default function AtmCdmPage() {
 
   const [allAccounts, setAllAccounts] = useState<AccountOption[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const { currency, formatPrice } = useCurrency();
 
   const [mode, setMode] = useState<Mode>("atm");
   const [cashId, setCashId] = useState("");
@@ -155,7 +156,7 @@ export default function AtmCdmPage() {
           { type: cashAccount.kind, id: cashId },
           amt
         );
-        setStatus({ type: "success", text: `ATM withdrawal of ₹${amt.toLocaleString()} successful!` });
+        setStatus({ type: "success", text: `ATM withdrawal of ${formatPrice(amt)} successful!` });
       } else {
         // CDM: cash → bank
         await transferMoney(
@@ -163,7 +164,7 @@ export default function AtmCdmPage() {
           { type: bankAccount.kind, id: bankId },
           amt
         );
-        setStatus({ type: "success", text: `CDM deposit of ₹${amt.toLocaleString()} successful!` });
+        setStatus({ type: "success", text: `CDM deposit of ${formatPrice(amt)} successful!` });
       }
       setAmount("");
       setNotes("");
@@ -269,12 +270,12 @@ export default function AtmCdmPage() {
                   {mode === "atm" ? "🏦 Bank / Savings" : "💵 Cash Wallet"}
                   {mode === "atm" && selectedBank && (
                     <div className="text-xs mt-1 opacity-70">
-                      ₹{selectedBank.balance.toLocaleString()}
+                      {formatPrice(selectedBank.balance)}
                     </div>
                   )}
                   {mode === "cdm" && selectedCash && (
                     <div className="text-xs mt-1 opacity-70">
-                      ₹{selectedCash.balance.toLocaleString()}
+                      {formatPrice(selectedCash.balance)}
                     </div>
                   )}
                 </div>
@@ -289,12 +290,12 @@ export default function AtmCdmPage() {
                   {mode === "atm" ? "💵 Cash Wallet" : "🏦 Bank / Savings"}
                   {mode === "atm" && selectedCash && (
                     <div className="text-xs mt-1 opacity-70">
-                      ₹{selectedCash.balance.toLocaleString()}
+                      {formatPrice(selectedCash.balance)}
                     </div>
                   )}
                   {mode === "cdm" && selectedBank && (
                     <div className="text-xs mt-1 opacity-70">
-                      ₹{selectedBank.balance.toLocaleString()}
+                      {formatPrice(selectedBank.balance)}
                     </div>
                   )}
                 </div>
@@ -319,7 +320,7 @@ export default function AtmCdmPage() {
                     ) : (
                       bankAccounts.map((a) => (
                         <SelectItem key={`${a.kind}-${a.id}`} value={a.id}>
-                          {a.name} — ₹{a.balance.toLocaleString()} ({a.subtype})
+                          {a.name} — {formatPrice(a.balance)} ({a.subtype})
                         </SelectItem>
                       ))
                     )}
@@ -344,7 +345,7 @@ export default function AtmCdmPage() {
                     ) : (
                       cashAccounts.map((a) => (
                         <SelectItem key={a.id} value={a.id}>
-                          {a.name} — ₹{a.balance.toLocaleString()}
+                          {a.name} — {formatPrice(a.balance)}
                         </SelectItem>
                       ))
                     )}
@@ -354,7 +355,7 @@ export default function AtmCdmPage() {
 
               {/* Amount */}
               <div className="space-y-2">
-                <Label htmlFor="atm-cdm-amount">Amount (₹)</Label>
+                <Label htmlFor="atm-cdm-amount">Amount ({currency})</Label>
                 <Input
                   id="atm-cdm-amount"
                   type="number"

@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSavingsGoalStore } from '@/store/savingsGoalStore';
+import { useCurrency } from '@/context/CurrencyContext';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
@@ -10,6 +11,7 @@ import { Plus } from 'lucide-react';
 export default function GoalsPage() {
   const { user } = useAuth();
   const { goals, loading, fetchGoals, deleteGoal } = useSavingsGoalStore();
+  const { formatPrice } = useCurrency();
 
   useEffect(() => {
     if (user?.uid) {
@@ -42,8 +44,8 @@ export default function GoalsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p>Target: ${g.targetAmount.toLocaleString()}</p>
-                <p>Current: ${g.currentAmount.toLocaleString()}</p>
+                <p>Target: {formatPrice(g.targetAmount)}</p>
+                <p>Current: {formatPrice(g.currentAmount)}</p>
                 <div className="mt-2 w-full bg-gray-200 rounded-full h-2.5">
                   <div
                     className="bg-green-600 h-2.5 rounded-full"

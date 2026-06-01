@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getDocs, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { transferMoney } from "@/services/transferService";
+import { useCurrency } from "@/context/CurrencyContext";
 
 interface Wallet { id: string; name: string; balance: number; }
 interface FixedDeposit { id: string; name: string; principal: number; }
@@ -20,6 +21,7 @@ interface Investment { id: string; name: string; amountInvested: number; }
 export default function TransferPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { formatPrice } = useCurrency();
 
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [fixedDeposits, setFixedDeposits] = useState<FixedDeposit[]>([]);
@@ -83,25 +85,25 @@ export default function TransferPage() {
       case "fixedDeposit":
         return fixedDeposits.map((fd) => (
           <SelectItem key={fd.id} value={fd.id}>
-            {fd.name} (₹{fd.principal})
+            {fd.name} ({formatPrice(fd.principal)})
           </SelectItem>
         ));
       case "savingsAccount":
         return savingsAccounts.map((sa) => (
           <SelectItem key={sa.id} value={sa.id}>
-            {sa.name} (₹{sa.balance})
+            {sa.name} ({formatPrice(sa.balance)})
           </SelectItem>
         ));
       case "investment":
         return investments.map((inv) => (
           <SelectItem key={inv.id} value={inv.id}>
-            {inv.name} (₹{inv.amountInvested})
+            {inv.name} ({formatPrice(inv.amountInvested)})
           </SelectItem>
         ));
       default:
         return wallets.map((w) => (
           <SelectItem key={w.id} value={w.id}>
-            {w.name} (₹{w.balance})
+            {w.name} ({formatPrice(w.balance)})
           </SelectItem>
         ));
     }
@@ -122,7 +124,7 @@ export default function TransferPage() {
               </SelectItem>
               {wallets.map((w) => (
                 <SelectItem key={w.id} value={w.id}>
-                  {w.name} (₹{w.balance})
+                  {w.name} ({formatPrice(w.balance)})
                 </SelectItem>
               ))}
             </Select>

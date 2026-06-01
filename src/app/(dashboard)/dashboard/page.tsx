@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useTransactionStore } from "@/store/transactionStore";
 import { useWalletStore } from "@/store/walletStore";
+import { useCurrency } from "@/context/CurrencyContext";
 import { ArrowDownIcon, ArrowUpIcon, DollarSign, Wallet } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { IncomeExpenseChart } from "@/components/charts/IncomeExpenseChart";
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { transactions, fetchTransactions } = useTransactionStore();
   const { wallets, fetchWallets } = useWalletStore();
+  const { formatPrice } = useCurrency();
 
   useEffect(() => {
     if (user) {
@@ -68,7 +70,7 @@ export default function DashboardPage() {
             <DollarSign className="w-4 h-4 text-gray-500 dark:text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-2xl font-bold">{formatPrice(totalBalance)}</div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Across all wallets
             </p>
@@ -80,7 +82,7 @@ export default function DashboardPage() {
             <ArrowUpIcon className="w-4 h-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-2xl font-bold">{formatPrice(totalIncome)}</div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               All time income
             </p>
@@ -92,7 +94,7 @@ export default function DashboardPage() {
             <ArrowDownIcon className="w-4 h-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalExpense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-2xl font-bold">{formatPrice(totalExpense)}</div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               All time expenses
             </p>
@@ -104,7 +106,7 @@ export default function DashboardPage() {
             <Wallet className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${netSavings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-2xl font-bold">{formatPrice(netSavings)}</div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Overall savings
             </p>
@@ -155,7 +157,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className={`ml-auto font-medium ${t.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
-                      {t.type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
+                      {t.type === 'income' ? '+' : '-'}{formatPrice(t.amount)}
                     </div>
                   </div>
                 ))}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, ArrowDown, ArrowUp, MoreVertical, Edit, Trash, Filter } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTransactionStore } from "@/store/transactionStore";
+import { useCurrency } from "@/context/CurrencyContext";
 import { Transaction, TransactionType } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -22,6 +23,7 @@ const CATEGORY_NAMES: Record<string, string> = {
 export default function TransactionsPage() {
   const { user } = useAuth();
   const { transactions, loading, fetchTransactions, removeTransaction } = useTransactionStore();
+  const { formatPrice } = useCurrency();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
@@ -111,7 +113,7 @@ export default function TransactionsPage() {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className={`font-semibold ${t.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                      {t.type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
+                      {t.type === 'income' ? '+' : '-'}{formatPrice(t.amount)}
                     </span>
                     <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => handleEdit(t)} className="p-2 text-gray-500 hover:text-blue-600 transition-colors">

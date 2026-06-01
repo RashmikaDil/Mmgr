@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useCurrency } from "@/context/CurrencyContext";
 import { SavingsAccount, InterestTier } from "@/types";
 import {
   Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
@@ -96,6 +97,7 @@ export default function SavingsAccountsPage() {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<SavingsAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currency, formatPrice } = useCurrency();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SavingsAccount | null>(null);
@@ -199,14 +201,14 @@ export default function SavingsAccountsPage() {
         <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/30 dark:to-cyan-800/20 border-cyan-200 dark:border-cyan-800">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Total Balance</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-cyan-900 dark:text-cyan-100">₹{totalBalance.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-cyan-900 dark:text-cyan-100">{formatPrice(totalBalance)}</div>
             <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-1">{accounts.length} accounts</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Projected Annual Interest</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-900 dark:text-green-100">₹{Math.round(totalAnnualInterest).toLocaleString()}</div>
+            <div className="text-2xl font-bold text-green-900 dark:text-green-100">{formatPrice(Math.round(totalAnnualInterest))}</div>
             <p className="text-xs text-green-600 dark:text-green-400 mt-1">across all accounts</p>
           </CardContent>
         </Card>
@@ -265,12 +267,12 @@ export default function SavingsAccountsPage() {
                   <div className="flex justify-between items-end">
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Balance</p>
-                      <p className="text-2xl font-bold">₹{acct.balance.toLocaleString()}</p>
+                      <p className="text-2xl font-bold">{formatPrice(acct.balance)}</p>
                     </div>
                     {annualInterest > 0 && (
                       <div className="text-right">
                         <p className="text-xs text-gray-500 dark:text-gray-400">Est. Annual Interest</p>
-                        <p className="font-semibold text-green-600">+₹{Math.round(annualInterest).toLocaleString()}</p>
+                        <p className="font-semibold text-green-600">+{formatPrice(Math.round(annualInterest))}</p>
                       </div>
                     )}
                   </div>
@@ -293,11 +295,11 @@ export default function SavingsAccountsPage() {
                   {/* Minimum deposit notice */}
                   {acct.minimumDeposit && acct.balance < acct.minimumDeposit && (
                     <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 rounded-md px-3 py-2 text-xs">
-                      ⚠️ Below minimum deposit (₹{acct.minimumDeposit.toLocaleString()})
+                      ⚠️ Below minimum deposit ({formatPrice(acct.minimumDeposit)})
                     </div>
                   )}
                   {acct.minimumDeposit && acct.balance >= acct.minimumDeposit && (
-                    <p className="text-xs text-gray-400">Min. balance: ₹{acct.minimumDeposit.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">Min. balance: {formatPrice(acct.minimumDeposit)}</p>
                   )}
 
                   {/* Active tier highlight */}
@@ -348,12 +350,12 @@ export default function SavingsAccountsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="sa-balance">Current Balance (₹) *</Label>
+                <Label htmlFor="sa-balance">Current Balance ({currency}) *</Label>
                 <Input id="sa-balance" type="number" min="0" placeholder="25000" value={form.balance}
                   onChange={(e) => setForm({ ...form, balance: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="sa-min">Minimum Balance (₹)</Label>
+                <Label htmlFor="sa-min">Minimum Balance ({currency})</Label>
                 <Input id="sa-min" type="number" min="0" placeholder="5000" value={form.minimumDeposit}
                   onChange={(e) => setForm({ ...form, minimumDeposit: e.target.value })} />
               </div>
@@ -392,7 +394,7 @@ export default function SavingsAccountsPage() {
               {tiers.map((tier, idx) => (
                 <div key={idx} className="flex items-center gap-2 p-2 rounded-md border bg-gray-50 dark:bg-gray-800/50">
                   <div className="flex-1 space-y-1">
-                    <Label className="text-xs">Above Balance (₹)</Label>
+                    <Label className="text-xs">Above Balance ({currency})</Label>
                     <Input type="number" min="0" placeholder="10000" value={tier.aboveAmount || ""}
                       onChange={(e) => updateTier(idx, "aboveAmount", e.target.value)} className="h-8 text-sm" />
                   </div>
@@ -429,7 +431,7 @@ export default function SavingsAccountsPage() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-gray-400">Est. Annual Interest</span>
-                        <span className="font-semibold text-green-700 dark:text-green-300">+₹{Math.round(est).toLocaleString()}</span>
+                        <span className="font-semibold text-green-700 dark:text-green-300">+{formatPrice(Math.round(est))}</span>
                       </div>
                     </>
                   );

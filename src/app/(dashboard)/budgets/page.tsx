@@ -5,6 +5,7 @@ import { Plus, Edit, Trash, Target } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useBudgetStore } from "@/store/budgetStore";
 import { useTransactionStore } from "@/store/transactionStore";
+import { useCurrency } from "@/context/CurrencyContext";
 import { Budget } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -21,6 +22,7 @@ export default function BudgetsPage() {
   const { user } = useAuth();
   const { budgets, loading, fetchBudgets, removeBudget } = useBudgetStore();
   const { transactions, fetchTransactions } = useTransactionStore();
+  const { formatPrice } = useCurrency();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [budgetToEdit, setBudgetToEdit] = useState<Budget | null>(null);
@@ -124,7 +126,7 @@ export default function BudgetsPage() {
                 <div>
                   <CardTitle className="text-lg">{CATEGORY_NAMES[budget.categoryId] || 'Unknown'}</CardTitle>
                   <CardDescription>
-                    ${budget.spent.toFixed(2)} / ${budget.amount.toFixed(2)}
+                    {formatPrice(budget.spent)} / {formatPrice(budget.amount)}
                   </CardDescription>
                 </div>
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -149,12 +151,12 @@ export default function BudgetsPage() {
                 />
                 {budget.isOverBudget && (
                   <p className="text-xs text-red-500 mt-2 font-medium">
-                    Over budget by ${(budget.spent - budget.amount).toFixed(2)}
+                    Over budget by {formatPrice(budget.spent - budget.amount)}
                   </p>
                 )}
                 {!budget.isOverBudget && (
                   <p className="text-xs text-green-600 mt-2 font-medium">
-                    ${(budget.amount - budget.spent).toFixed(2)} left
+                    {formatPrice(budget.amount - budget.spent)} left
                   </p>
                 )}
               </CardContent>

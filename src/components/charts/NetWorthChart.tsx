@@ -1,6 +1,7 @@
 "use client";
 
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { useCurrency } from '@/context/CurrencyContext';
 
 // Dummy data for demonstration – will be replaced with real net‑worth data later
 const data = [
@@ -19,13 +20,14 @@ const data = [
 ];
 
 export function NetWorthChart() {
+  const { currency, formatPrice } = useCurrency();
   return (
     <ResponsiveContainer width="100%" height={300}>
       <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
         <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-        <YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-        <Tooltip formatter={(value: any) => `₹${Number(value).toLocaleString()}`} />
+        <YAxis tickFormatter={(v) => `${currency.symbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
+        <Tooltip formatter={(value: any) => `${formatPrice(Number(value))}`} />
         <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} />
       </AreaChart>
     </ResponsiveContainer>
