@@ -11,6 +11,7 @@ import {
   Info,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { getDocs, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { transferMoney } from "@/services/transferService";
 import { useCurrency } from "@/context/CurrencyContext";
