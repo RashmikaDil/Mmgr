@@ -129,7 +129,8 @@ export default function CryptoPage() {
     setDialogOpen(true);
   };
 
-  const handleCoinSelect = (id: string) => {
+  const handleCoinSelect = (id: string | null) => {
+    if (!id) return;
     if (id === "custom") {
       setForm((f) => ({ ...f, selectedCoinId: "custom", name: "", symbol: "", customId: "" }));
       return;
