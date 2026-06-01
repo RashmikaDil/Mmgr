@@ -20,7 +20,10 @@ import {
 } from "@/components/ui/select";
 import {
   PlusCircle, Banknote, Pencil, Trash2, TrendingUp, Layers, X, Plus,
+  Sparkles, BrainCircuit, ChevronRight, Loader2,
 } from "lucide-react";
+import { useWalletStore } from "@/store/walletStore";
+import { useTransactionStore } from "@/store/transactionStore";
 import {
   collection, addDoc, getDocs, query, where, updateDoc, deleteDoc, doc, Timestamp,
 } from "firebase/firestore";
@@ -106,6 +109,22 @@ export default function SavingsAccountsPage() {
   const [tiers, setTiers] = useState<InterestTier[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // AI Optimizer State
+  const [showAI, setShowAI] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiInsights, setAiInsights] = useState<any[]>([]);
+
+  // Load other stores for AI insights
+  const { wallets, fetchWallets } = useWalletStore();
+  const { transactions, fetchTransactions } = useTransactionStore();
+
+  useEffect(() => {
+    if (user?.uid) {
+      fetchWallets(user.uid);
+      fetchTransactions(user.uid);
+    }
+  }, [user?.uid, fetchWallets, fetchTransactions]);
+
   const load = async () => {
     if (!user?.uid) return;
     setLoading(true);
@@ -135,6 +154,100 @@ export default function SavingsAccountsPage() {
   const avgRate = accounts.length > 0
     ? accounts.reduce((s, a) => s + (a.interestRate ?? 0), 0) / accounts.length
     : 0;
+
+  // ── AI Savings Optimizer Heuristics ──────────────────────────────────────────
+  const generateAIInsights = () => {
+    setAiLoading(true);
+    setShowAI(true);
+    
+    setTimeout(() => {
+      const insights = [];
+      
+      // 1. Idle Checking Cash Optimization
+      const idleCash = wallets.reduce((s, w) => s + w.balance, 0);
+      const highestAcct = [...accounts].sort((a, b) => (b.interestRate || 0) - (a.interestRate || 0))[0];
+      if (idleCash > 500 && highestAcct) {
+        const rate = highestAcct.interestRate || 0;
+        const potentialInterest = idleCash * (rate / 100);
+        insights.push({
+          type: "yield",
+          title: "Maximize Idle Checking Cash",
+          description: `You have ${formatPrice(idleCash)} sitting in wallets earning 0% interest. Moving this to your highest-yielding savings account (${highestAcct.name} at ${rate}%) could earn you an extra ${formatPrice(potentialInterest)} in annual interest!`,
+          impact: `+${formatPrice(potentialInterest)}/yr`,
+          color: "indigo"
+        });
+      }
+
+      // 2. Emergency Fund analysis
+      let avgExpenses = 0;
+      if (transactions.length > 0) {
+        const expenses = transactions.filter(t => t.type === 'expense');
+        const totalExp = expenses.reduce((s, t) => s + t.amount, 0);
+        avgExpenses = totalExp > 0 ? (totalExp / 3) : 0;
+      }
+      
+      if (avgExpenses > 0) {
+        const recommendedBuffer = avgExpenses * 6;
+        const shortfall = recommendedBuffer - totalBalance;
+        const isFunded = shortfall <= 0;
+        insights.push({
+          type: "emergency",
+          title: "6-Month Emergency Buffer Analysis",
+          description: isFunded 
+            ? `Fantastic work! Your total savings of ${formatPrice(totalBalance)} fully secures a 6-month emergency buffer (${formatPrice(recommendedBuffer)} based on average monthly expenses of ${formatPrice(avgExpenses)}).`
+            : `Your estimated monthly expenses are ${formatPrice(avgExpenses)}. A recommended 6-month emergency buffer is ${formatPrice(recommendedBuffer)}. You currently have a shortfall of ${formatPrice(shortfall)}. Consider allocating checking surpluses here.`,
+          impact: isFunded ? "Fully Secured" : `${formatPrice(shortfall)} Gap`,
+          color: isFunded ? "emerald" : "amber"
+        });
+      } else {
+        const recommendedBuffer = 5000;
+        const shortfall = recommendedBuffer - totalBalance;
+        const isFunded = shortfall <= 0;
+        insights.push({
+          type: "emergency",
+          title: "Emergency Fund Buffer Planning",
+          description: isFunded
+            ? `Your total savings of ${formatPrice(totalBalance)} is above the standard $5,000 emergency buffer recommendation. Keep it up!`
+            : `We recommend building an emergency fund of at least $5,000. You are currently ${formatPrice(shortfall)} away from this baseline goal.`,
+          impact: isFunded ? "Healthy" : `${formatPrice(shortfall)} Gap`,
+          color: isFunded ? "emerald" : "amber"
+        });
+      }
+
+      // 3. Fixed Deposit yield optimizations
+      const fdRate = fixedDeposits.length > 0 
+        ? fixedDeposits.reduce((s, fd) => s + fd.interestRate, 0) / fixedDeposits.length
+        : 6.5;
+      
+      if (fixedDeposits.length === 0 && savingsBalance > 1000) {
+        const potentialFD = savingsBalance * 0.3;
+        const fdYield = potentialFD * (fdRate / 100);
+        insights.push({
+          type: "fd",
+          title: "FD Yield Optimizer",
+          description: `You currently have no active Fixed Deposits. Since standard FDs are yielding around ${fdRate}%, locking in 30% of your savings (${formatPrice(potentialFD)}) into a Fixed Deposit could guarantee you a secure ${formatPrice(fdYield)} annual interest yield.`,
+          impact: "Rate Lock",
+          color: "purple"
+        });
+      } else if (fixedDeposits.length > 0 && highestAcct) {
+        const highestSavingsRate = highestAcct.interestRate || 0;
+        if (fdRate > highestSavingsRate && savingsBalance > 2000) {
+          const surplusSavings = savingsBalance * 0.2;
+          const extraYield = surplusSavings * ((fdRate - highestSavingsRate) / 100);
+          insights.push({
+            type: "fd",
+            title: "Interest Yield Arbitrage",
+            description: `Your active Fixed Deposits yield an average rate of ${fdRate.toFixed(2)}%, which is higher than your highest savings account rate of ${highestSavingsRate.toFixed(2)}%. Shifting a surplus of ${formatPrice(surplusSavings)} into a new Fixed Deposit would yield an extra ${formatPrice(extraYield)} per year.`,
+            impact: `+${formatPrice(extraYield)}/yr`,
+            color: "purple"
+          });
+        }
+      }
+
+      setAiInsights(insights);
+      setAiLoading(false);
+    }, 1500);
+  };
 
   // ── handlers ─────────────────────────────────────────────────────────────────
 
@@ -235,6 +348,100 @@ export default function SavingsAccountsPage() {
           </CardContent>
         </Card>
       </div>
+      
+      {/* AI Optimizer Panel */}
+      <Card className="relative overflow-hidden border border-indigo-200 dark:border-indigo-800 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-950/20 dark:to-purple-950/20 shadow-md">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-200/20 dark:bg-indigo-700/10 rounded-full blur-2xl -mr-10 -mt-10" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-200/20 dark:bg-purple-700/10 rounded-full blur-2xl -ml-10 -mb-10" />
+        
+        <CardContent className="p-6 relative">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-indigo-500 rounded-lg text-white shadow-lg shadow-indigo-500/20">
+                <Sparkles className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  AI Savings & Yield Optimizer
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 animate-pulse">Smart Advisor</span>
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  Analyze checking balances, FDs, and bank interest rates to maximize your passive yield.
+                </p>
+              </div>
+            </div>
+            
+            {!showAI && (
+              <Button onClick={generateAIInsights} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-lg transition-all gap-2 duration-300">
+                <BrainCircuit className="w-4 h-4" />
+                Analyze Savings
+              </Button>
+            )}
+          </div>
+
+          {showAI && (
+            <div className="mt-6 border-t border-indigo-100 dark:border-indigo-900/50 pt-5 space-y-4">
+              {aiLoading ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin" />
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400 animate-pulse">
+                    AI is auditing checking accounts, savings accounts, and fixed deposits...
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-3">
+                  {aiInsights.map((insight, idx) => {
+                    const colors: Record<string, { bg: string, border: string, text: string, iconBg: string }> = {
+                      indigo: {
+                        bg: "bg-indigo-50/50 dark:bg-indigo-950/10",
+                        border: "border-indigo-100 dark:border-indigo-900/40",
+                        text: "text-indigo-900 dark:text-indigo-100",
+                        iconBg: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
+                      },
+                      emerald: {
+                        bg: "bg-emerald-50/50 dark:bg-emerald-950/10",
+                        border: "border-emerald-100 dark:border-emerald-900/40",
+                        text: "text-emerald-900 dark:text-emerald-100",
+                        iconBg: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-indigo-300"
+                      },
+                      amber: {
+                        bg: "bg-amber-50/50 dark:bg-amber-950/10",
+                        border: "border-amber-100 dark:border-amber-900/40",
+                        text: "text-amber-900 dark:text-amber-100",
+                        iconBg: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                      },
+                      purple: {
+                        bg: "bg-purple-50/50 dark:bg-purple-950/10",
+                        border: "border-purple-100 dark:border-purple-900/40",
+                        text: "text-purple-900 dark:text-purple-100",
+                        iconBg: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300"
+                      }
+                    };
+                    const colorSet = colors[insight.color] || colors.indigo;
+                    return (
+                      <div key={idx} className={`p-4 rounded-xl border ${colorSet.bg} ${colorSet.border} flex flex-col justify-between gap-3 shadow-sm hover:shadow-md transition-shadow`}>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded ${colorSet.iconBg}`}>
+                              {insight.type === "yield" ? "Passive Yield" : insight.type === "emergency" ? "Security Buffer" : "FD lock"}
+                            </span>
+                            <span className="text-xs font-semibold text-gray-500">{insight.impact}</span>
+                          </div>
+                          <h4 className="font-bold text-sm text-gray-900 dark:text-gray-100">{insight.title}</h4>
+                          <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{insight.description}</p>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline self-end">
+                          Apply Optimization <ChevronRight className="w-3 h-3" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Account cards */}
       {loading ? (

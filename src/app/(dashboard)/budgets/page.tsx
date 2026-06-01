@@ -80,6 +80,13 @@ export default function BudgetsPage() {
       });
   }, [budgets, transactions, currentMonth, currentYear]);
 
+  const { totalPlanned, totalSpent, totalLeft } = useMemo(() => {
+    const totalPlanned = budgetsWithProgress.reduce((acc, b) => acc + b.amount, 0);
+    const totalSpent = budgetsWithProgress.reduce((acc, b) => acc + b.spent, 0);
+    const totalLeft = totalPlanned - totalSpent;
+    return { totalPlanned, totalSpent, totalLeft };
+  }, [budgetsWithProgress]);
+
   if (loading && budgets.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -104,6 +111,49 @@ export default function BudgetsPage() {
           Add Budget
         </Button>
       </div>
+
+      {/* Budget Summary Cards */}
+      {budgetsWithProgress.length > 0 && (
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Total Budget Planned</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{formatPrice(totalPlanned)}</div>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">across {budgetsWithProgress.length} categories</p>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 border-purple-200 dark:border-purple-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">Total Spent</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">{formatPrice(totalSpent)}</div>
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                {((totalSpent / (totalPlanned || 1)) * 100).toFixed(0)}% of total plan
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className={`bg-gradient-to-br ${totalLeft >= 0 ? "from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 border-green-200 dark:border-green-800" : "from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/20 border-red-200 dark:border-red-800"} col-span-2 lg:col-span-1`}>
+            <CardHeader className="pb-2">
+              <CardTitle className={`text-sm font-medium ${totalLeft >= 0 ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"}`}>
+                {totalLeft >= 0 ? "Total Left" : "Total Overspent"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${totalLeft >= 0 ? "text-green-900 dark:text-green-100" : "text-red-900 dark:text-red-100"}`}>
+                {formatPrice(Math.abs(totalLeft))}
+              </div>
+              <p className={`text-xs mt-1 ${totalLeft >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                {totalLeft >= 0 ? "remaining to spend" : "exceeded budget limit"}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {budgetsWithProgress.length === 0 ? (
         <Card className="border-dashed">
