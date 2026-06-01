@@ -83,6 +83,18 @@ export interface Investment {
   createdAt: string;
 }
 
+export interface CryptoHolding {
+  id: string;
+  userId: string;
+  familyId?: string;
+  name: string;         // e.g. "Bitcoin"
+  coinId: string;       // CoinGecko ID, e.g. "bitcoin"
+  symbol: string;       // e.g. "BTC"
+  quantity: number;     // how many coins held
+  purchaseDate: string; // YYYY-MM-DD
+  createdAt: string;
+}
+
 /** A single tier rule: if balance/principal exceeds `aboveAmount`, apply `rate` */
 export interface InterestTier {
   aboveAmount: number;  // threshold (e.g. 10000)

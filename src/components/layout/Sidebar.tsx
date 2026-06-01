@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wallet, ArrowRightLeft, Target, FileText, Settings, LogOut, Landmark, Banknote, PiggyBank, TrendingUp, DollarSign, Briefcase, CalendarClock, BellRing, CreditCard } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowRightLeft, Target, FileText, Settings, LogOut, Landmark, Banknote, PiggyBank, TrendingUp, DollarSign, Briefcase, CalendarClock, BellRing, CreditCard, Bitcoin } from "lucide-react";
 import { authService } from "@/services/authService";
 import { useRouter } from "next/navigation";
 
@@ -18,7 +18,7 @@ const advancedItems = [
   { name: "Savings & Goals",  href: "/savings",          icon: PiggyBank },
   { name: "Fixed Deposits",   href: "/fixed-deposits",   icon: Landmark },
   { name: "Savings Accounts", href: "/savings-accounts", icon: Banknote },
-  { name: "Investments",      href: "/investments",      icon: TrendingUp },
+  { name: "Crypto",           href: "/crypto",           icon: Bitcoin },
   { name: "Reports",          href: "/reports",          icon: FileText },
   { name: "Net Worth", href: "/net-worth", icon: DollarSign },
   { name: "Tax", href: "/tax", icon: Briefcase },
