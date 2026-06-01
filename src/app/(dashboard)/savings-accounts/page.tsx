@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrency } from "@/context/CurrencyContext";
-import { SavingsAccount, InterestTier } from "@/types";
+import { SavingsAccount, InterestTier, FixedDeposit } from "@/types";
 import {
   Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -96,6 +96,7 @@ async function deleteAcct(id: string) {
 export default function SavingsAccountsPage() {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<SavingsAccount[]>([]);
+  const [fixedDeposits, setFixedDeposits] = useState<FixedDeposit[]>([]);
   const [loading, setLoading] = useState(true);
   const { currency, formatPrice } = useCurrency();
 
@@ -108,16 +109,28 @@ export default function SavingsAccountsPage() {
   const load = async () => {
     if (!user?.uid) return;
     setLoading(true);
-    const data = await fetchAll(user.uid);
-    setAccounts(data);
-    setLoading(false);
+    try {
+      const [acctsData, fdsSnap] = await Promise.all([
+        fetchAll(user.uid),
+        getDocs(query(collection(db, "fixedDeposits"), where("userId", "==", user.uid)))
+      ]);
+      const fdsData = fdsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as FixedDeposit));
+      setAccounts(acctsData);
+      setFixedDeposits(fdsData);
+    } catch (e) {
+      console.error("Error fetching savings page data:", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, [user]);
 
   // ── derived stats ─────────────────────────────────────────────────────────────
 
-  const totalBalance       = accounts.reduce((s, a) => s + a.balance, 0);
+  const savingsBalance     = accounts.reduce((s, a) => s + a.balance, 0);
+  const fdBalance          = fixedDeposits.reduce((s, fd) => s + fd.principal, 0);
+  const totalBalance       = savingsBalance + fdBalance;
   const totalAnnualInterest = accounts.reduce((s, a) => s + calcAnnualInterest(a), 0);
   const avgRate = accounts.length > 0
     ? accounts.reduce((s, a) => s + (a.interestRate ?? 0), 0) / accounts.length
@@ -202,7 +215,9 @@ export default function SavingsAccountsPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Total Balance</CardTitle></CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-cyan-900 dark:text-cyan-100">{formatPrice(totalBalance)}</div>
-            <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-1">{accounts.length} accounts</p>
+            <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-1">
+              {formatPrice(savingsBalance)} savings + {formatPrice(fdBalance)} FDs
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 border-green-200 dark:border-green-800">
