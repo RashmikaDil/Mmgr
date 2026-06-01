@@ -67,7 +67,13 @@ export default function CryptoPage() {
     const p = prices[h.coinId];
     if (!p) return null;
     const valueUSD = h.quantity * p.usd;
-    return { priceUSD: p.usd, valueUSD, valueCurrency: toSelectedCurrency(valueUSD), change24h: p.usd_24h_change ?? 0 };
+    return { 
+      priceUSD: p.usd, 
+      priceCurrency: toSelectedCurrency(p.usd),
+      valueUSD, 
+      valueCurrency: toSelectedCurrency(valueUSD), 
+      change24h: p.usd_24h_change ?? 0 
+    };
   };
 
   const totalValueUSD = holdings.reduce((s, h) => {
@@ -237,7 +243,9 @@ export default function CryptoPage() {
             <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">
               {pricesLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : formatPrice(toSelectedCurrency(totalValueUSD))}
             </div>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">${totalValueUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD</p>
+            {currency !== "USD" && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">${totalValueUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD</p>
+            )}
           </CardContent>
         </Card>
 
@@ -309,7 +317,7 @@ export default function CryptoPage() {
                       <p className="font-medium text-sm truncate">{h.name} <span className="text-gray-400 font-normal">({h.symbol})</span></p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {h.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })} coins
-                        {stats ? ` · $${stats.priceUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })} / coin` : ""}
+                        {stats ? ` · ${formatPrice(stats.priceCurrency)} / coin` : ""}
                       </p>
                     </div>
                   </div>
