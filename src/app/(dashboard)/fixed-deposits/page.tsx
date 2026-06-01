@@ -21,8 +21,10 @@ import {
 } from "@/components/ui/select";
 import {
   PlusCircle, Landmark, Pencil, Trash2, TrendingUp,
-  Calendar, Layers, X, Plus,
+  Calendar, Layers, X, Plus, BrainCircuit, Sparkles,
 } from "lucide-react";
+import { aiService } from "@/services/aiService";
+import { useMemo } from "react";
 import { format, differenceInDays, differenceInMonths } from "date-fns";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
@@ -109,7 +111,37 @@ export default function FixedDepositsPage() {
   const totalInterest  = totalMaturity - totalPrincipal;
   const activeCount    = deposits.filter((d) => d.status === "active").length;
 
+  // AI FD advisor calculations
+  const fdAdvisor = useMemo(() => {
+    const activeFDs = deposits.filter(d => d.status === 'active');
+    if (activeFDs.length === 0) return null;
+
+    const avgRate = activeFDs.reduce((s, fd) => {
+      return s + toAnnualRate(getEffectiveRate(fd.principal, fd.interestRate, fd.interestTiers), fd.rateFrequency);
+    }, 0) / activeFDs.length;
+
+    const annualIncome = activeFDs.reduce((s, fd) => {
+      const rate = toAnnualRate(getEffectiveRate(fd.principal, fd.interestRate, fd.interestTiers), fd.rateFrequency) / 100;
+      return s + fd.principal * rate;
+    }, 0);
+    const monthlyIncome = annualIncome / 12;
+
+    const laddering = totalPrincipal > 0 ? [
+      { duration: "12 months", amount: Math.round(totalPrincipal * 0.4), rationale: "Highest near-term liquidity" },
+      { duration: "24 months", amount: Math.round(totalPrincipal * 0.35), rationale: "Balanced yield & access" },
+      { duration: "36 months", amount: Math.round(totalPrincipal * 0.25), rationale: "Maximum long-term yield" },
+    ] : [];
+
+    const maturingSoon = activeFDs.filter(fd => {
+      const days = differenceInDays(new Date(fd.maturityDate), new Date());
+      return days >= 0 && days <= 30;
+    });
+
+    return { avgRate, annualIncome, monthlyIncome, laddering, maturingSoon };
+  }, [deposits, totalPrincipal]);
+
   // ── handlers ─────────────────────────────────────────────────────────────────
+
 
   function openAdd() {
     setEditing(null);
@@ -226,6 +258,92 @@ export default function FixedDepositsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI FD Advisor Panel */}
+      {fdAdvisor && (
+        <Card className="border border-indigo-150 dark:border-indigo-900/50 bg-gradient-to-br from-indigo-50/50 to-purple-50/50 dark:from-indigo-950/20 dark:to-purple-950/10 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-100/30 dark:bg-indigo-900/10 rounded-full blur-3xl pointer-events-none" />
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 flex items-center gap-2">
+              <BrainCircuit className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              AI Fixed Deposit Advisor
+              <span className="ml-auto flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                Live Analysis
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-6 md:grid-cols-3">
+              {/* Passive Income Projection */}
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Passive Income Projection</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center bg-white dark:bg-zinc-900 rounded-lg px-3 py-2.5 border border-gray-100 dark:border-zinc-800">
+                    <span className="text-xs text-gray-600 dark:text-gray-300">Monthly yield</span>
+                    <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{formatPrice(Math.round(fdAdvisor.monthlyIncome))}</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-white dark:bg-zinc-900 rounded-lg px-3 py-2.5 border border-gray-100 dark:border-zinc-800">
+                    <span className="text-xs text-gray-600 dark:text-gray-300">Annual yield</span>
+                    <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400">{formatPrice(Math.round(fdAdvisor.annualIncome))}</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-white dark:bg-zinc-900 rounded-lg px-3 py-2.5 border border-gray-100 dark:border-zinc-800">
+                    <span className="text-xs text-gray-600 dark:text-gray-300">Avg. rate</span>
+                    <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">{fdAdvisor.avgRate.toFixed(2)}% p.a.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Laddering Strategy */}
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" /> AI Laddering Strategy
+                </p>
+                <div className="space-y-2">
+                  {fdAdvisor.laddering.map((ladder, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-white dark:bg-zinc-900 rounded-lg px-3 py-2.5 border border-gray-100 dark:border-zinc-800">
+                      <div>
+                        <div className="text-xs font-bold text-gray-700 dark:text-gray-200">{ladder.duration}</div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500">{ladder.rationale}</div>
+                      </div>
+                      <span className="text-xs font-extrabold text-purple-600 dark:text-purple-400">{formatPrice(ladder.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Smart Alerts */}
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" /> Smart Alerts
+                </p>
+                <div className="space-y-2">
+                  {fdAdvisor.maturingSoon.length > 0 ? (
+                    fdAdvisor.maturingSoon.map((fd) => (
+                      <div key={fd.id} className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-lg px-3 py-2.5">
+                        <div className="text-xs font-bold text-amber-700 dark:text-amber-300">⚠️ Maturing Soon</div>
+                        <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                          <strong>{fd.name}</strong> matures on {format(new Date(fd.maturityDate), 'dd MMM yyyy')}.
+                          Consider reinvesting {formatPrice(Math.round(calcMaturity(fd)))} immediately to avoid yield gap.
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-lg px-3 py-2.5">
+                      <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300">✅ All FDs On Schedule</div>
+                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">No deposits are maturing within the next 30 days. Your portfolio is stable.</div>
+                    </div>
+                  )}
+                  <div className="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-lg px-3 py-2.5">
+                    <div className="text-xs font-bold text-indigo-700 dark:text-indigo-300">💡 Reinvestment Tip</div>
+                    <div className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-0.5">Reinvest maturity payouts immediately into the longest available duration to compound interest earnings maximally.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* FD Cards */}
       {loading ? (

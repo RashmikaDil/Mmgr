@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wallet, ArrowRightLeft, Target, FileText, Settings, LogOut, Landmark, Banknote, PiggyBank, TrendingUp, DollarSign, Briefcase, CalendarClock, BellRing, CreditCard, Bitcoin } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowRightLeft, Target, FileText, Settings, LogOut, Landmark, Banknote, PiggyBank, TrendingUp, DollarSign, Briefcase, CalendarClock, BellRing, CreditCard, Bitcoin, Sparkles } from "lucide-react";
 import { authService } from "@/services/authService";
 import { useRouter } from "next/navigation";
 
 const navItems = [
   { name: "Dashboard",        href: "/dashboard",        icon: LayoutDashboard },
+  { name: "AI Coach",         href: "/ai-coach",         icon: Sparkles },
   { name: "Wallets",          href: "/wallets",          icon: Wallet },
   { name: "Transactions",     href: "/transactions",     icon: ArrowRightLeft },
   { name: "ATM / CDM",        href: "/atm-cdm",          icon: CreditCard },

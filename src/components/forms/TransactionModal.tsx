@@ -8,6 +8,7 @@ import { Transaction, TransactionType } from "@/types";
 import { useTransactionStore } from "@/store/transactionStore";
 import { useWalletStore } from "@/store/walletStore";
 import { useAuth } from "@/hooks/useAuth";
+import { aiService } from "@/services/aiService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,10 +61,11 @@ const CATEGORIES = {
 
 export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultType = 'expense' }: TransactionModalProps) {
   const { user } = useAuth();
-  const { addTransaction, editTransaction } = useTransactionStore();
+  const { transactions, addTransaction, editTransaction } = useTransactionStore();
   const { wallets, fetchWallets } = useWalletStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<{ name: string; confidence: number } | null>(null);
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema) as any,
@@ -75,6 +77,23 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
   });
 
   const selectedType = watch('type');
+  const titleValue = watch('title');
+
+  // AI Categorization side-effect
+  useEffect(() => {
+    if (selectedType === 'expense' && titleValue && titleValue.length > 2) {
+      const suggestion = aiService.categorizeExpense(titleValue);
+      if (suggestion && suggestion.categoryId !== 'cat-exp-9') {
+        setValue('categoryId', suggestion.categoryId);
+        const catName = CATEGORIES.expense.find(c => c.id === suggestion.categoryId)?.name || 'Other';
+        setAiSuggestion({ name: catName, confidence: Math.round(suggestion.confidence * 100) });
+      } else {
+        setAiSuggestion(null);
+      }
+    } else {
+      setAiSuggestion(null);
+    }
+  }, [titleValue, selectedType, setValue]);
 
   useEffect(() => {
     if (user && wallets.length === 0) {
@@ -94,6 +113,7 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
         notes: transactionToEdit.notes || "",
         isRecurring: transactionToEdit.isRecurring,
       });
+      setAiSuggestion(null);
     } else {
       reset({
         title: "",
@@ -105,6 +125,7 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
         notes: "",
         isRecurring: false,
       });
+      setAiSuggestion(null);
     }
   }, [transactionToEdit, reset, defaultType, wallets]);
 
@@ -112,6 +133,20 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
     if (!user) return;
     setIsSubmitting(true);
     setError(null);
+    
+    // AI Anomaly Checking pre-save
+    if (data.type === 'expense') {
+      const tempTx = [...transactions, { ...data, id: 'temp-idx', createdAt: new Date().toISOString() } as Transaction];
+      const anomalies = aiService.detectAnomalies(tempTx);
+      if (anomalies.length > 0) {
+        const proceed = window.confirm(`⚠️ AI Anomaly Warning:\n\n${anomalies[0]}\n\nDo you still wish to record this transaction?`);
+        if (!proceed) {
+          setIsSubmitting(false);
+          return;
+        }
+      }
+    }
+
     try {
       if (transactionToEdit) {
         await editTransaction(transactionToEdit.id, data, transactionToEdit);
@@ -215,6 +250,12 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
               </SelectContent>
             </Select>
             {errors.categoryId && <p className="text-sm text-red-500">{errors.categoryId.message}</p>}
+            {aiSuggestion && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-1.5 flex items-center gap-1.5 animate-pulse bg-emerald-50/50 dark:bg-emerald-950/10 px-2 py-1 rounded-md border border-emerald-100 dark:border-emerald-900/30 w-fit">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                AI Auto-Categorized: {aiSuggestion.name} ({aiSuggestion.confidence}% Confidence)
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

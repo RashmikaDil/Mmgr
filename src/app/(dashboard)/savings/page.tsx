@@ -25,7 +25,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PlusCircle, Target, Pencil, Trash2, TrendingUp, CheckCircle2, Clock } from "lucide-react";
+import { PlusCircle, Target, Pencil, Trash2, TrendingUp, CheckCircle2, Clock, BrainCircuit } from "lucide-react";
+import { aiService } from "@/services/aiService";
 import { format, differenceInDays } from "date-fns";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
@@ -209,6 +210,10 @@ export default function SavingsPage() {
             const isComplete = goal.currentAmount >= goal.targetAmount;
             const remaining = goal.targetAmount - goal.currentAmount;
 
+            // AI prediction — use conservative 10% of target as assumed monthly rate if nothing known
+            const estimatedMonthlyRate = goals.length > 0 ? (totalSaved / Math.max(goals.length, 1)) * 0.1 : 500;
+            const aiPrediction = !isComplete ? aiService.predictGoal(goal, estimatedMonthlyRate) : null;
+
             return (
               <Card
                 key={goal.id}
@@ -272,6 +277,43 @@ export default function SavingsPage() {
                       ? `Overdue by ${Math.abs(daysLeft)} days`
                       : `${daysLeft} days remaining`}
                   </div>
+
+                  {/* AI Prediction panel */}
+                  {aiPrediction && (
+                    <div className={`mt-3 p-3 rounded-xl text-xs border ${
+                      aiPrediction.status === 'on-track'
+                        ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30'
+                        : aiPrediction.status === 'lagging'
+                        ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30'
+                        : 'bg-red-50/60 dark:bg-red-950/20 border-red-100 dark:border-red-900/30'
+                    }`}>
+                      <div className="flex items-center gap-1.5 font-bold mb-2 text-gray-700 dark:text-gray-300">
+                        <BrainCircuit className="w-3.5 h-3.5 text-indigo-500" />
+                        AI Prediction
+                        <span className={`ml-auto px-1.5 py-0.5 rounded-full font-extrabold uppercase tracking-wide text-[9px] ${
+                          aiPrediction.status === 'on-track' ? 'bg-emerald-500 text-white' :
+                          aiPrediction.status === 'lagging' ? 'bg-amber-500 text-white' :
+                          'bg-red-500 text-white'
+                        }`}>
+                          {aiPrediction.status === 'on-track' ? 'On Track' : aiPrediction.status === 'lagging' ? 'Lagging' : 'At Risk'}
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-gray-600 dark:text-gray-400">
+                        <div className="flex justify-between">
+                          <span>Success probability</span>
+                          <span className="font-bold text-gray-800 dark:text-gray-200">{aiPrediction.probability}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Est. completion</span>
+                          <span className="font-bold text-gray-800 dark:text-gray-200">{aiPrediction.completionDate}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Suggested monthly</span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">{formatPrice(aiPrediction.recommendedMonthlyRate)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
 
                 <CardFooter className="pt-0 gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
