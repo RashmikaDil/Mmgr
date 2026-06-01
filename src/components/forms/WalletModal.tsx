@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const walletSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.enum(['Cash', 'Bank Account', 'Savings Account', 'Fixed Deposit', 'Digital Wallet', 'Investment Account', 'Other']),
+  type: z.enum(['Cash', 'Bank Account', 'Digital Wallet', 'Investment Account', 'Other']),
   balance: z.coerce.number(),
   currency: z.string().min(1, "Currency is required"),
 });
@@ -28,7 +28,7 @@ interface WalletModalProps {
   walletToEdit?: Wallet | null;
 }
 
-const WALLET_TYPES: WalletType[] = ['Cash', 'Bank Account', 'Savings Account', 'Fixed Deposit', 'Digital Wallet', 'Investment Account', 'Other'];
+const WALLET_TYPES: WalletType[] = ['Cash', 'Bank Account', 'Digital Wallet', 'Investment Account', 'Other'];
 
 export function WalletModal({ isOpen, onClose, walletToEdit }: WalletModalProps) {
   const { user } = useAuth();

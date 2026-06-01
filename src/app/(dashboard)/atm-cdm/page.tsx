@@ -1,12 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Banknote, ArrowDownToLine, ArrowUpFromLine, CheckCircle2, AlertCircle, Loader2, Info } from "lucide-react";
+import {
+  Banknote,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Info,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getDocs, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { transferMoney } from "@/services/transferService";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,96 +32,161 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface WalletOption {
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type AccountKind = "wallet" | "savingsAccount";
+
+interface AccountOption {
   id: string;
   name: string;
   balance: number;
-  type: string;
+  /** Wallet sub-type (Cash, Bank Account, etc.) or "Savings Account" for SA */
+  subtype: string;
+  /** Which Firestore collection this account lives in */
+  kind: AccountKind;
 }
 
 type Mode = "atm" | "cdm";
 
+// ─── Helper ─────────────────────────────────────────────────────────────────────
+
+function groupLabel(a: AccountOption) {
+  return a.kind === "savingsAccount"
+    ? `Savings Account (${a.name})`
+    : `${a.subtype} (${a.name})`;
+}
+
+// ─── Page ───────────────────────────────────────────────────────────────────────
+
 export default function AtmCdmPage() {
   const { user } = useAuth();
 
-  const [wallets, setWallets] = useState<WalletOption[]>([]);
-  const [loadingWallets, setLoadingWallets] = useState(true);
+  const [allAccounts, setAllAccounts] = useState<AccountOption[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
 
   const [mode, setMode] = useState<Mode>("atm");
-  const [cashWalletId, setCashWalletId] = useState("");
-  const [bankWalletId, setBankWalletId] = useState("");
+  const [cashId, setCashId] = useState("");
+  const [bankId, setBankId] = useState("");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [status, setStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Derived lists
-  const cashWallets = wallets.filter((w) => w.type === "Cash");
-  const bankWallets = wallets.filter((w) => w.type !== "Cash");
+  const cashAccounts = allAccounts.filter((a) => a.kind === "wallet" && a.subtype === "Cash");
+  const EXCLUDED_WALLET_SUBTYPES = new Set(["Cash", "Savings Account", "Fixed Deposit"]);
+  const bankAccounts = allAccounts.filter(
+    (a) => !(a.kind === "wallet" && EXCLUDED_WALLET_SUBTYPES.has(a.subtype))
+  );
+
+  // ── Load all accounts ────────────────────────────────────────────────────────
+  const loadAccounts = async (uid: string) => {
+    setLoadingAccounts(true);
+    try {
+      // 1. Regular wallets
+      const walletSnap = await getDocs(
+        query(collection(db, "wallets"), where("userId", "==", uid))
+      );
+      const wallets: AccountOption[] = walletSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          name: data.name as string,
+          balance: data.balance as number,
+          subtype: data.type as string,
+          kind: "wallet",
+        };
+      });
+
+      // 2. Savings accounts (separate collection)
+      const saSnap = await getDocs(
+        query(collection(db, "savingsAccounts"), where("userId", "==", uid))
+      );
+      const savingsAccounts: AccountOption[] = saSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          name: data.name as string,
+          balance: data.balance as number,
+          subtype: "Savings Account",
+          kind: "savingsAccount",
+        };
+      });
+
+      setAllAccounts([...wallets, ...savingsAccounts]);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
 
   useEffect(() => {
-    if (!user?.uid) return;
-    setLoadingWallets(true);
-    const q = query(collection(db, "wallets"), where("userId", "==", user.uid));
-    getDocs(q)
-      .then((snap) => {
-        const data = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as WalletOption));
-        setWallets(data);
-      })
-      .finally(() => setLoadingWallets(false));
+    if (user?.uid) loadAccounts(user.uid);
   }, [user]);
 
+  // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatusMessage(null);
+    setStatus(null);
 
     const amt = Number(amount);
     if (!amt || amt <= 0) {
-      setStatusMessage({ type: "error", text: "Please enter a valid positive amount." });
+      setStatus({ type: "error", text: "Please enter a valid positive amount." });
       return;
     }
-    if (!cashWalletId || !bankWalletId) {
-      setStatusMessage({ type: "error", text: "Please select both wallets." });
+    if (!cashId || !bankId) {
+      setStatus({ type: "error", text: "Please select both accounts." });
       return;
     }
-    if (cashWalletId === bankWalletId) {
-      setStatusMessage({ type: "error", text: "Source and destination wallets must be different." });
+    if (cashId === bankId) {
+      setStatus({ type: "error", text: "Source and destination must be different." });
       return;
     }
+
+    const cashAccount = allAccounts.find((a) => a.id === cashId)!;
+    const bankAccount = allAccounts.find((a) => a.id === bankId)!;
 
     setIsSubmitting(true);
     try {
       if (mode === "atm") {
         // ATM: bank → cash
-        await transferMoney({ type: "wallet", id: bankWalletId }, { type: "wallet", id: cashWalletId }, amt);
-        setStatusMessage({ type: "success", text: `ATM withdrawal of ₹${amt.toLocaleString()} successful!` });
+        await transferMoney(
+          { type: bankAccount.kind, id: bankId },
+          { type: cashAccount.kind, id: cashId },
+          amt
+        );
+        setStatus({ type: "success", text: `ATM withdrawal of ₹${amt.toLocaleString()} successful!` });
       } else {
         // CDM: cash → bank
-        await transferMoney({ type: "wallet", id: cashWalletId }, { type: "wallet", id: bankWalletId }, amt);
-        setStatusMessage({ type: "success", text: `CDM deposit of ₹${amt.toLocaleString()} successful!` });
+        await transferMoney(
+          { type: cashAccount.kind, id: cashId },
+          { type: bankAccount.kind, id: bankId },
+          amt
+        );
+        setStatus({ type: "success", text: `CDM deposit of ₹${amt.toLocaleString()} successful!` });
       }
       setAmount("");
       setNotes("");
-      // Refresh wallet balances displayed
-      const q = query(collection(db, "wallets"), where("userId", "==", user!.uid));
-      const snap = await getDocs(q);
-      setWallets(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as WalletOption)));
+      // Refresh balances
+      if (user?.uid) await loadAccounts(user.uid);
     } catch (err) {
-      setStatusMessage({ type: "error", text: (err as Error).message });
+      setStatus({ type: "error", text: (err as Error).message });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const selectedCash = wallets.find((w) => w.id === cashWalletId);
-  const selectedBank = wallets.find((w) => w.id === bankWalletId);
+  const selectedCash = allAccounts.find((a) => a.id === cashId);
+  const selectedBank = allAccounts.find((a) => a.id === bankId);
 
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">ATM / CDM</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+          ATM / CDM
+        </h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
           Withdraw cash from your bank (ATM) or deposit cash into your bank (CDM).
         </p>
@@ -118,7 +197,7 @@ export default function AtmCdmPage() {
         <button
           type="button"
           id="atm-mode-btn"
-          onClick={() => { setMode("atm"); setStatusMessage(null); }}
+          onClick={() => { setMode("atm"); setStatus(null); }}
           className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-xl border-2 font-semibold text-sm transition-all ${
             mode === "atm"
               ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300"
@@ -131,7 +210,7 @@ export default function AtmCdmPage() {
         <button
           type="button"
           id="cdm-mode-btn"
-          onClick={() => { setMode("cdm"); setStatusMessage(null); }}
+          onClick={() => { setMode("cdm"); setStatus(null); }}
           className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-xl border-2 font-semibold text-sm transition-all ${
             mode === "cdm"
               ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-500 dark:text-emerald-300"
@@ -144,15 +223,17 @@ export default function AtmCdmPage() {
       </div>
 
       {/* Info banner */}
-      <div className={`flex items-start gap-3 p-4 rounded-lg text-sm ${
-        mode === "atm"
-          ? "bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
-          : "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300"
-      }`}>
+      <div
+        className={`flex items-start gap-3 p-4 rounded-lg text-sm ${
+          mode === "atm"
+            ? "bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+            : "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300"
+        }`}
+      >
         <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
         {mode === "atm"
-          ? "ATM: Moves money from your bank/savings wallet into your cash wallet."
-          : "CDM: Moves money from your cash wallet into your bank/savings wallet."}
+          ? "ATM: Moves money from your bank or savings account into your cash wallet."
+          : "CDM: Moves money from your cash wallet into your bank or savings account."}
       </div>
 
       {/* Form card */}
@@ -164,53 +245,81 @@ export default function AtmCdmPage() {
           </CardTitle>
           <CardDescription>
             {mode === "atm"
-              ? "Select the bank wallet to withdraw from and the cash wallet to receive the funds."
-              : "Select the cash wallet to draw from and the bank wallet to deposit into."}
+              ? "Select a bank / savings account to withdraw from and a cash wallet to receive the funds."
+              : "Select a cash wallet to draw from and a bank / savings account to deposit into."}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loadingWallets ? (
+          {loadingAccounts ? (
             <div className="flex items-center justify-center py-8 gap-2 text-gray-500">
               <Loader2 className="w-5 h-5 animate-spin" />
-              Loading wallets…
+              Loading accounts…
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Flow visual */}
               <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-zinc-900 rounded-lg text-sm">
-                <div className={`flex-1 text-center p-3 rounded-lg font-medium ${
-                  mode === "atm" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                }`}>
-                  {mode === "atm" ? "🏦 Bank Wallet" : "💵 Cash Wallet"}
-                  {mode === "atm" && selectedBank && <div className="text-xs mt-1 opacity-70">₹{selectedBank.balance.toLocaleString()}</div>}
-                  {mode === "cdm" && selectedCash && <div className="text-xs mt-1 opacity-70">₹{selectedCash.balance.toLocaleString()}</div>}
+                <div
+                  className={`flex-1 text-center p-3 rounded-lg font-medium ${
+                    mode === "atm"
+                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+                      : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                  }`}
+                >
+                  {mode === "atm" ? "🏦 Bank / Savings" : "💵 Cash Wallet"}
+                  {mode === "atm" && selectedBank && (
+                    <div className="text-xs mt-1 opacity-70">
+                      ₹{selectedBank.balance.toLocaleString()}
+                    </div>
+                  )}
+                  {mode === "cdm" && selectedCash && (
+                    <div className="text-xs mt-1 opacity-70">
+                      ₹{selectedCash.balance.toLocaleString()}
+                    </div>
+                  )}
                 </div>
                 <div className="text-gray-400 font-bold text-lg">→</div>
-                <div className={`flex-1 text-center p-3 rounded-lg font-medium ${
-                  mode === "atm" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                }`}>
-                  {mode === "atm" ? "💵 Cash Wallet" : "🏦 Bank Wallet"}
-                  {mode === "atm" && selectedCash && <div className="text-xs mt-1 opacity-70">₹{selectedCash.balance.toLocaleString()}</div>}
-                  {mode === "cdm" && selectedBank && <div className="text-xs mt-1 opacity-70">₹{selectedBank.balance.toLocaleString()}</div>}
+                <div
+                  className={`flex-1 text-center p-3 rounded-lg font-medium ${
+                    mode === "atm"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                      : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+                  }`}
+                >
+                  {mode === "atm" ? "💵 Cash Wallet" : "🏦 Bank / Savings"}
+                  {mode === "atm" && selectedCash && (
+                    <div className="text-xs mt-1 opacity-70">
+                      ₹{selectedCash.balance.toLocaleString()}
+                    </div>
+                  )}
+                  {mode === "cdm" && selectedBank && (
+                    <div className="text-xs mt-1 opacity-70">
+                      ₹{selectedBank.balance.toLocaleString()}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Bank wallet selector */}
+              {/* Bank / Savings Account selector */}
               <div className="space-y-2">
-                <Label htmlFor="bank-wallet-select">
-                  {mode === "atm" ? "Bank / Savings Wallet (Source)" : "Bank / Savings Wallet (Destination)"}
+                <Label htmlFor="bank-account-select">
+                  {mode === "atm"
+                    ? "Bank / Savings Account (Source)"
+                    : "Bank / Savings Account (Destination)"}
                 </Label>
-                <Select value={bankWalletId} onValueChange={(v) => setBankWalletId(v || "")}>
-                  <SelectTrigger id="bank-wallet-select">
-                    <SelectValue placeholder="Select bank wallet" />
+                <Select value={bankId} onValueChange={(v) => setBankId(v || "")}>
+                  <SelectTrigger id="bank-account-select">
+                    <SelectValue placeholder="Select account" />
                   </SelectTrigger>
                   <SelectContent>
-                    {bankWallets.length === 0 ? (
-                      <div className="px-4 py-2 text-sm text-gray-400">No bank wallets found</div>
+                    {bankAccounts.length === 0 ? (
+                      <div className="px-4 py-2 text-sm text-gray-400">
+                        No bank or savings accounts found
+                      </div>
                     ) : (
-                      bankWallets.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>
-                          {w.name} — ₹{w.balance.toLocaleString()} ({w.type})
+                      bankAccounts.map((a) => (
+                        <SelectItem key={`${a.kind}-${a.id}`} value={a.id}>
+                          {a.name} — ₹{a.balance.toLocaleString()} ({a.subtype})
                         </SelectItem>
                       ))
                     )}
@@ -223,19 +332,19 @@ export default function AtmCdmPage() {
                 <Label htmlFor="cash-wallet-select">
                   {mode === "atm" ? "Cash Wallet (Destination)" : "Cash Wallet (Source)"}
                 </Label>
-                <Select value={cashWalletId} onValueChange={(v) => setCashWalletId(v || "")}>
+                <Select value={cashId} onValueChange={(v) => setCashId(v || "")}>
                   <SelectTrigger id="cash-wallet-select">
                     <SelectValue placeholder="Select cash wallet" />
                   </SelectTrigger>
                   <SelectContent>
-                    {cashWallets.length === 0 ? (
+                    {cashAccounts.length === 0 ? (
                       <div className="px-4 py-2 text-sm text-gray-400">
                         No cash wallets found — create a wallet of type &quot;Cash&quot; first.
                       </div>
                     ) : (
-                      cashWallets.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>
-                          {w.name} — ₹{w.balance.toLocaleString()}
+                      cashAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name} — ₹{a.balance.toLocaleString()}
                         </SelectItem>
                       ))
                     )}
@@ -258,7 +367,7 @@ export default function AtmCdmPage() {
                 />
               </div>
 
-              {/* Notes (optional, stored only locally for now) */}
+              {/* Notes */}
               <div className="space-y-2">
                 <Label htmlFor="atm-cdm-notes">Notes (Optional)</Label>
                 <Input
@@ -271,17 +380,20 @@ export default function AtmCdmPage() {
               </div>
 
               {/* Status */}
-              {statusMessage && (
-                <div className={`flex items-center gap-2 p-3 rounded-lg text-sm font-medium ${
-                  statusMessage.type === "success"
-                    ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                    : "bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                }`}>
-                  {statusMessage.type === "success"
-                    ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                    : <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  }
-                  {statusMessage.text}
+              {status && (
+                <div
+                  className={`flex items-center gap-2 p-3 rounded-lg text-sm font-medium ${
+                    status.type === "success"
+                      ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                      : "bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                  }`}
+                >
+                  {status.type === "success" ? (
+                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  )}
+                  {status.text}
                 </div>
               )}
 
@@ -296,11 +408,20 @@ export default function AtmCdmPage() {
                 }`}
               >
                 {isSubmitting ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</>
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processing…
+                  </>
                 ) : mode === "atm" ? (
-                  <><ArrowDownToLine className="w-4 h-4 mr-2" />Withdraw Cash</>
+                  <>
+                    <ArrowDownToLine className="w-4 h-4 mr-2" />
+                    Withdraw Cash
+                  </>
                 ) : (
-                  <><ArrowUpFromLine className="w-4 h-4 mr-2" />Deposit Cash</>
+                  <>
+                    <ArrowUpFromLine className="w-4 h-4 mr-2" />
+                    Deposit Cash
+                  </>
                 )}
               </Button>
             </form>
