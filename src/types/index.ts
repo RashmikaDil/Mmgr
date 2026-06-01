@@ -91,6 +91,7 @@ export interface CryptoHolding {
   coinId: string;       // CoinGecko ID, e.g. "bitcoin"
   symbol: string;       // e.g. "BTC"
   quantity: number;     // how many coins held
+  totalInvestedUSD?: number; // Total amount invested (stored in USD to handle currency switching)
   purchaseDate: string; // YYYY-MM-DD
   createdAt: string;
 }

@@ -42,7 +42,7 @@ const COIN_COLORS: Record<string, string> = {
   "shiba-inu": "#ffa409", litecoin: "#bfbbbb", uniswap: "#ff007a",
 };
 
-const EMPTY_FORM = { selectedCoinId: "", customId: "", name: "", symbol: "", quantity: "", purchaseDate: new Date().toISOString().slice(0, 10) };
+const EMPTY_FORM = { selectedCoinId: "", customId: "", name: "", symbol: "", quantity: "", totalInvested: "", purchaseDate: new Date().toISOString().slice(0, 10) };
 
 export default function CryptoPage() {
   const { user } = useAuth();
@@ -67,12 +67,26 @@ export default function CryptoPage() {
     const p = prices[h.coinId];
     if (!p) return null;
     const valueUSD = h.quantity * p.usd;
+    const valueCurrency = toSelectedCurrency(valueUSD);
+    let totalInvestedCurrency: number | undefined;
+    let profitLossCurrency: number | undefined;
+    let roi: number | undefined;
+
+    if (h.totalInvestedUSD !== undefined) {
+      totalInvestedCurrency = toSelectedCurrency(h.totalInvestedUSD);
+      profitLossCurrency = valueCurrency - totalInvestedCurrency;
+      roi = totalInvestedCurrency > 0 ? (profitLossCurrency / totalInvestedCurrency) * 100 : 0;
+    }
+
     return { 
       priceUSD: p.usd, 
       priceCurrency: toSelectedCurrency(p.usd),
       valueUSD, 
-      valueCurrency: toSelectedCurrency(valueUSD), 
-      change24h: p.usd_24h_change ?? 0 
+      valueCurrency, 
+      change24h: p.usd_24h_change ?? 0,
+      totalInvestedCurrency,
+      profitLossCurrency,
+      roi
     };
   };
 
@@ -80,6 +94,18 @@ export default function CryptoPage() {
     const p = prices[h.coinId];
     return s + (p ? h.quantity * p.usd : 0);
   }, 0);
+
+  const { currentUSDForROI, investedUSDForROI } = holdings.reduce((acc, h) => {
+    if (h.totalInvestedUSD !== undefined) {
+      acc.investedUSDForROI += h.totalInvestedUSD;
+      const p = prices[h.coinId];
+      if (p) acc.currentUSDForROI += h.quantity * p.usd;
+    }
+    return acc;
+  }, { currentUSDForROI: 0, investedUSDForROI: 0 });
+
+  const portfolioProfitLossUSD = investedUSDForROI > 0 ? currentUSDForROI - investedUSDForROI : undefined;
+  const portfolioROI = investedUSDForROI > 0 ? (portfolioProfitLossUSD! / investedUSDForROI) * 100 : undefined;
 
   const bestPerformer = holdings.reduce<{ name: string; change: number } | null>((best, h) => {
     const p = prices[h.coinId];
@@ -129,6 +155,7 @@ export default function CryptoPage() {
       name: h.name,
       symbol: h.symbol,
       quantity: String(h.quantity),
+      totalInvested: h.totalInvestedUSD !== undefined ? String((h.totalInvestedUSD * (exchangeRates[currency] || 1)).toFixed(2)) : "",
       purchaseDate: h.purchaseDate,
     });
     setFormError(null);
@@ -138,11 +165,11 @@ export default function CryptoPage() {
   const handleCoinSelect = (id: string | null) => {
     if (!id) return;
     if (id === "custom") {
-      setForm((f) => ({ ...f, selectedCoinId: "custom", name: "", symbol: "", customId: "" }));
+      setForm((f) => ({ ...f, selectedCoinId: "custom", name: "", symbol: "", customId: "", totalInvested: "" }));
       return;
     }
     const coin = POPULAR_COINS.find((c) => c.id === id);
-    if (coin) setForm((f) => ({ ...f, selectedCoinId: id, name: coin.name, symbol: coin.symbol, customId: "" }));
+    if (coin) setForm((f) => ({ ...f, selectedCoinId: id, name: coin.name, symbol: coin.symbol, customId: "", totalInvested: "" }));
   };
 
   const effectiveCoinId = form.selectedCoinId === "custom" ? form.customId.trim().toLowerCase() : form.selectedCoinId;
@@ -155,6 +182,13 @@ export default function CryptoPage() {
     const qty = parseFloat(form.quantity);
     if (isNaN(qty) || qty <= 0) { setFormError("Quantity must be a positive number."); return; }
 
+    let totalInvestedUSD: number | undefined = undefined;
+    if (form.totalInvested.trim() !== "") {
+      const invested = parseFloat(form.totalInvested);
+      if (isNaN(invested) || invested < 0) { setFormError("Total invested must be a valid positive number."); return; }
+      totalInvestedUSD = invested / (exchangeRates[currency] || 1);
+    }
+
     setSaving(true);
     setFormError(null);
     const payload = {
@@ -163,6 +197,7 @@ export default function CryptoPage() {
       name: form.name.trim(),
       symbol: form.symbol.trim().toUpperCase(),
       quantity: qty,
+      totalInvestedUSD,
       purchaseDate: form.purchaseDate,
     };
     try {
@@ -243,8 +278,15 @@ export default function CryptoPage() {
             <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">
               {pricesLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : formatPrice(toSelectedCurrency(totalValueUSD))}
             </div>
-            {currency !== "USD" && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">${totalValueUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD</p>
+            {portfolioProfitLossUSD !== undefined ? (
+              <div className={`text-xs mt-1 font-medium flex items-center gap-1 ${portfolioProfitLossUSD >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                {portfolioProfitLossUSD >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {formatPrice(Math.abs(toSelectedCurrency(portfolioProfitLossUSD)))} ({portfolioROI?.toFixed(2)}%)
+              </div>
+            ) : (
+              currency !== "USD" && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">${totalValueUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD</p>
+              )
             )}
           </CardContent>
         </Card>
@@ -328,10 +370,17 @@ export default function CryptoPage() {
                       ) : stats ? (
                         <>
                           <p className="font-semibold text-sm">{formatPrice(stats.valueCurrency)}</p>
-                          <p className={`text-xs flex items-center justify-end gap-0.5 ${isUp ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
-                            {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                            {isUp ? "+" : ""}{stats.change24h.toFixed(2)}% 24h
-                          </p>
+                          {stats.roi !== undefined ? (
+                             <p className={`text-xs flex items-center justify-end gap-0.5 ${stats.roi >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                              {stats.roi >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {formatPrice(Math.abs(stats.profitLossCurrency!))} ({stats.roi.toFixed(2)}%)
+                             </p>
+                          ) : (
+                            <p className={`text-xs flex items-center justify-end gap-0.5 ${isUp ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                              {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {isUp ? "+" : ""}{stats.change24h.toFixed(2)}% 24h
+                            </p>
+                          )}
                         </>
                       ) : (
                         <p className="text-xs text-gray-400">Price unavailable</p>
@@ -417,6 +466,11 @@ export default function CryptoPage() {
                   value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
+                <Label htmlFor="coin-invested">Total Invested ({currency})</Label>
+                <Input id="coin-invested" type="number" min="0" step="any" placeholder="Optional"
+                  value={form.totalInvested} onChange={(e) => setForm((f) => ({ ...f, totalInvested: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5 col-span-2">
                 <Label htmlFor="coin-date">Purchase Date</Label>
                 <Input id="coin-date" type="date" value={form.purchaseDate}
                   onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value }))} />

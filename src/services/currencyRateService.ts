@@ -42,17 +42,17 @@ async function fetchFromFawaz(): Promise<ExchangeRates> {
 }
 
 export async function fetchExchangeRates(): Promise<ExchangeRates> {
-  // Try primary source (Frankfurter — ECB data, no key)
-  try {
-    const rates = await fetchFromFrankfurter();
-    return rates;
-  } catch (e) {
-    console.warn('[currencyRateService] Frankfurter failed, trying fallback:', e);
-  }
-
-  // Try fallback source (fawazahmed0 via jsDelivr CDN, no key)
+  // Try primary source (fawazahmed0 via jsDelivr CDN, 160+ currencies)
   try {
     const rates = await fetchFromFawaz();
+    return rates;
+  } catch (e) {
+    console.warn('[currencyRateService] Fawaz failed, trying fallback:', e);
+  }
+
+  // Try fallback source (Frankfurter — ECB data, ~30 currencies)
+  try {
+    const rates = await fetchFromFrankfurter();
     return rates;
   } catch (e) {
     console.error('[currencyRateService] Both exchange rate sources failed:', e);
