@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Transaction } from '@/types';
 import { format, parseISO, subMonths } from 'date-fns';
 import { useCurrency } from '@/context/CurrencyContext';
+import { CURRENCIES } from '@/components/CurrencySwitcher';
 
 interface IncomeExpenseChartProps {
   transactions: Transaction[];
@@ -12,6 +13,8 @@ interface IncomeExpenseChartProps {
 
 export function IncomeExpenseChart({ transactions }: IncomeExpenseChartProps) {
   const { formatPrice, currency } = useCurrency();
+  const symbol = CURRENCIES.find(c => c.code === currency)?.symbol || '$';
+  
   const data = useMemo(() => {
     // Group last 6 months
     const months = Array.from({ length: 6 }).map((_, i) => {
@@ -45,7 +48,7 @@ export function IncomeExpenseChart({ transactions }: IncomeExpenseChartProps) {
       <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
-        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} tickFormatter={(val) => `${currency.symbol}${val}`} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} tickFormatter={(val) => `${symbol}${val}`} />
         <Tooltip 
           cursor={{ fill: 'rgba(0,0,0,0.05)' }} 
           contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
