@@ -122,12 +122,14 @@ export const aiService = {
 
   /** Calculate standard predictive Financial Health Score (0-100) */
   analyzeFinancialHealth(
-    wallets: { balance: number }[],
+    wallets: { balance: number; type?: string }[],
     savingsAccounts: SavingsAccount[],
     fixedDeposits: FixedDeposit[],
     transactions: Transaction[]
   ): FinancialHealthScore {
-    const checkingBalance = wallets.reduce((s, w) => s + w.balance, 0);
+    const checkingBalance = wallets
+      .filter((w) => w.type !== "Fixed Deposit" && w.type !== "Savings Account")
+      .reduce((s, w) => s + w.balance, 0);
     const savingsBalance = savingsAccounts.reduce((s, a) => s + a.balance, 0);
     const fdBalance = fixedDeposits.reduce((s, fd) => s + fd.principal, 0);
     const totalLiquid = checkingBalance + savingsBalance + fdBalance;
@@ -320,7 +322,7 @@ export const aiService = {
 
     const stateSummary = `
       Current User Balances/State:
-      - Checking Accounts/Wallets: ${JSON.stringify(financialState.wallets.map(w => ({ name: w.name, balance: w.balance })))}
+      - Checking Accounts/Wallets: ${JSON.stringify(financialState.wallets.filter((w: any) => w.type !== "Fixed Deposit" && w.type !== "Savings Account").map(w => ({ name: w.name, balance: w.balance })))}
       - Savings Accounts: ${JSON.stringify(financialState.savingsAccounts.map(s => ({ name: s.name, balance: s.balance, rate: s.interestRate })))}
       - Fixed Deposits: ${JSON.stringify(financialState.fixedDeposits.map(fd => ({ principal: fd.principal, rate: fd.interestRate, status: fd.status })))}
       - Financial Goals: ${JSON.stringify(financialState.goals.map(g => ({ name: g.name, target: g.targetAmount, current: g.currentAmount })))}
@@ -373,7 +375,9 @@ export const aiService = {
     const transactions = state.transactions || [];
     const goals = state.goals || [];
 
-    const checkingBalance = wallets.reduce((s: number, w: any) => s + w.balance, 0);
+    const checkingBalance = wallets
+      .filter((w: any) => w.type !== "Fixed Deposit" && w.type !== "Savings Account")
+      .reduce((s: number, w: any) => s + w.balance, 0);
     const savingsBalance = savingsAccounts.reduce((s: number, a: any) => s + a.balance, 0);
     const fdBalance = fixedDeposits.reduce((s: number, fd: any) => s + fd.principal, 0);
     const totalLiquid = checkingBalance + savingsBalance + fdBalance;
@@ -427,5 +431,225 @@ export const aiService = {
     }
 
     return `Hello! I am your AI Financial Coach. 🤖\n\nI can analyze your bank accounts, savings portfolios, FDs, and expense transactions to advise you. You have total liquid assets of **LKR ${totalLiquid.toLocaleString()}** (Checking: ${checkingBalance.toLocaleString()}, Savings: ${savingsBalance.toLocaleString()}, FDs: ${fdBalance.toLocaleString()}).\n\n**Ask me queries like:**\n- *"How much did I spend?"*\n- *"Analyze my fixed deposits"* \n- *"Review my savings goals"*`;
+  },
+
+  /** Simple 3-month moving-average forecast for income and expenses */
+  forecastNextMonth(transactions: Transaction[]): {
+    forecastedIncome: number;
+    forecastedExpense: number;
+    forecastedSavings: number;
+    confidence: 'low' | 'medium' | 'high';
+    monthlyData: { month: string; income: number; expense: number; predicted?: boolean }[];
+  } {
+    // Build per-month buckets
+    const buckets: Record<string, { income: number; expense: number }> = {};
+    transactions.forEach(t => {
+      const d = new Date(t.date);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!buckets[key]) buckets[key] = { income: 0, expense: 0 };
+      if (t.type === 'income') buckets[key].income += t.amount;
+      else buckets[key].expense += t.amount;
+    });
+
+    const sortedMonths = Object.keys(buckets).sort();
+    const last3 = sortedMonths.slice(-3);
+
+    const avgIncome = last3.length > 0
+      ? last3.reduce((s, m) => s + buckets[m].income, 0) / last3.length
+      : 0;
+    const avgExpense = last3.length > 0
+      ? last3.reduce((s, m) => s + buckets[m].expense, 0) / last3.length
+      : 0;
+
+    // Next month label
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextKey = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`;
+    const nextLabel = nextMonth.toLocaleString('default', { month: 'short', year: '2-digit' });
+
+    const monthlyData: { month: string; income: number; expense: number; predicted?: boolean }[] = sortedMonths.slice(-5).map(m => {
+      const [yr, mo] = m.split('-');
+      const label = new Date(parseInt(yr), parseInt(mo) - 1).toLocaleString('default', { month: 'short', year: '2-digit' });
+      return { month: label, income: Math.round(buckets[m].income), expense: Math.round(buckets[m].expense) };
+    });
+
+    // Append forecasted month
+    monthlyData.push({
+      month: nextLabel,
+      income: Math.round(avgIncome * 1.02),   // slight growth trend
+      expense: Math.round(avgExpense * 1.03),  // slight inflation trend
+      predicted: true
+    });
+
+    const confidence: 'low' | 'medium' | 'high' = sortedMonths.length >= 6 ? 'high' : sortedMonths.length >= 3 ? 'medium' : 'low';
+
+    return {
+      forecastedIncome: Math.round(avgIncome * 1.02),
+      forecastedExpense: Math.round(avgExpense * 1.03),
+      forecastedSavings: Math.round(avgIncome * 1.02 - avgExpense * 1.03),
+      confidence,
+      monthlyData
+    };
+  },
+
+  /** Generate AI-recommended monthly budget allocations based on income & history */
+  generateBudgetPlan(
+    transactions: Transaction[],
+    totalMonthlyIncome: number
+  ): {
+    healthScore: number;
+    healthLabel: string;
+    allocations: { categoryId: string; name: string; recommended: number; current: number; status: 'over' | 'under' | 'ok' }[];
+    savingsTarget: number;
+    emergencyContribution: number;
+    summary: string;
+  } {
+    const income = totalMonthlyIncome > 0 ? totalMonthlyIncome : 50000;
+
+    // 50/30/20 rule adapted for Sri Lanka
+    const needs = income * 0.50;
+    const wants = income * 0.30;
+    const savings = income * 0.20;
+
+    // Compute current spending per category this month
+    const now = new Date();
+    const currentMonthExpenses = transactions.filter(t => {
+      const d = new Date(t.date);
+      return t.type === 'expense' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const currentByCategory: Record<string, number> = {};
+    currentMonthExpenses.forEach(t => {
+      currentByCategory[t.categoryId] = (currentByCategory[t.categoryId] || 0) + t.amount;
+    });
+
+    const totalCurrentSpend = Object.values(currentByCategory).reduce((s, v) => s + v, 0);
+
+    const allocations = [
+      { categoryId: 'cat-exp-1', name: 'Food',          pct: 0.20 },
+      { categoryId: 'cat-exp-2', name: 'Transport',     pct: 0.10 },
+      { categoryId: 'cat-exp-3', name: 'Utilities',     pct: 0.08 },
+      { categoryId: 'cat-exp-4', name: 'Shopping',      pct: 0.10 },
+      { categoryId: 'cat-exp-5', name: 'Education',     pct: 0.07 },
+      { categoryId: 'cat-exp-6', name: 'Medical',       pct: 0.05 },
+      { categoryId: 'cat-exp-7', name: 'Entertainment', pct: 0.05 },
+      { categoryId: 'cat-exp-8', name: 'Fuel',          pct: 0.05 },
+    ].map(a => {
+      const recommended = Math.round(income * a.pct);
+      const current = Math.round(currentByCategory[a.categoryId] || 0);
+      const status: 'over' | 'under' | 'ok' =
+        current > recommended * 1.15 ? 'over' :
+        current > 0 && current < recommended * 0.5 ? 'under' : 'ok';
+      return { ...a, recommended, current, status };
+    });
+
+    // Health score: penalise overspend categories
+    const overCount = allocations.filter(a => a.status === 'over').length;
+    const spendRatio = totalCurrentSpend / income;
+    let healthScore = 100 - (overCount * 10) - Math.max(0, Math.round((spendRatio - 0.7) * 100));
+    healthScore = Math.max(0, Math.min(100, healthScore));
+
+    const healthLabel = healthScore >= 80 ? 'Excellent' : healthScore >= 60 ? 'Good' : healthScore >= 40 ? 'Fair' : 'Needs Work';
+
+    const emergencyContribution = Math.round(income * 0.05); // 5% to emergency fund
+
+    const summary = overCount === 0
+      ? `Your budget allocation looks healthy! Maintain the 50/30/20 split to reach your ${healthLabel.toLowerCase()} score.`
+      : `${overCount} category${overCount > 1 ? 'ies are' : ' is'} overspending their recommended limits. Reducing these would lift your Budget Health Score significantly.`;
+
+    return { healthScore, healthLabel, allocations, savingsTarget: Math.round(savings), emergencyContribution, summary };
+  },
+
+  /** Generate smart notification alerts across all financial data */
+  generateSmartNotifications(
+    transactions: Transaction[],
+    fixedDeposits: FixedDeposit[],
+    budgets: { categoryId: string; amount: number; month: number; year: number }[],
+    monthlySavingsRate: number,
+    formatPrice: (v: number) => string
+  ): { id: string; type: 'warning' | 'info' | 'success' | 'danger'; title: string; message: string; icon: string }[] {
+    const notifications: { id: string; type: 'warning' | 'info' | 'success' | 'danger'; title: string; message: string; icon: string }[] = [];
+    const now = new Date();
+
+    // 1. FD Maturing in 7 days (urgent)
+    fixedDeposits.filter(fd => fd.status === 'active').forEach(fd => {
+      const daysLeft = Math.round((new Date(fd.maturityDate).getTime() - now.getTime()) / 86400000);
+      if (daysLeft >= 0 && daysLeft <= 7) {
+        notifications.push({
+          id: `fd-urgent-${fd.id}`,
+          type: 'danger',
+          title: '🔴 FD Maturing in ' + daysLeft + ' day(s)',
+          message: `"${fd.name}" matures on ${new Date(fd.maturityDate).toLocaleDateString()}. Plan your reinvestment now to avoid yield gap.`,
+          icon: '🏦'
+        });
+      } else if (daysLeft >= 0 && daysLeft <= 30) {
+        notifications.push({
+          id: `fd-warn-${fd.id}`,
+          type: 'warning',
+          title: '⚠️ FD Maturing Soon',
+          message: `"${fd.name}" matures in ${daysLeft} days. Consider laddering into a new FD immediately.`,
+          icon: '📅'
+        });
+      }
+    });
+
+    // 2. Budget exceeded this month
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const currentExpenses: Record<string, number> = {};
+    transactions
+      .filter(t => {
+        const d = new Date(t.date);
+        return t.type === 'expense' && d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
+      })
+      .forEach(t => { currentExpenses[t.categoryId] = (currentExpenses[t.categoryId] || 0) + t.amount; });
+
+    budgets
+      .filter(b => b.month === currentMonth && b.year === currentYear)
+      .forEach(b => {
+        const spent = currentExpenses[b.categoryId] || 0;
+        const catName = CATEGORY_MAP[b.categoryId] || 'Category';
+        if (spent > b.amount) {
+          notifications.push({
+            id: `budget-over-${b.categoryId}`,
+            type: 'danger',
+            title: `🔴 Budget Exceeded: ${catName}`,
+            message: `You spent ${formatPrice(spent)} against a ${formatPrice(b.amount)} limit. Over by ${formatPrice(spent - b.amount)}.`,
+            icon: '💸'
+          });
+        } else if (spent > b.amount * 0.85) {
+          notifications.push({
+            id: `budget-near-${b.categoryId}`,
+            type: 'warning',
+            title: `⚠️ Budget Alert: ${catName}`,
+            message: `You've used ${Math.round((spent / b.amount) * 100)}% of your ${catName} budget (${formatPrice(spent)} / ${formatPrice(b.amount)}).`,
+            icon: '📊'
+          });
+        }
+      });
+
+    // 3. Low savings rate warning
+    if (monthlySavingsRate < 10 && monthlySavingsRate >= 0) {
+      notifications.push({
+        id: 'low-savings',
+        type: 'warning',
+        title: '⚠️ Low Savings Rate',
+        message: `Your current savings rate is under 10%. Financial experts recommend saving at least 15-20% of your income monthly.`,
+        icon: '💰'
+      });
+    }
+
+    // 4. Positive: if no issues
+    if (notifications.length === 0) {
+      notifications.push({
+        id: 'all-clear',
+        type: 'success',
+        title: '✅ All Systems Healthy',
+        message: 'No budget overruns, no maturing FDs, and your savings rate looks good. Keep up the excellent financial discipline!',
+        icon: '🎉'
+      });
+    }
+
+    return notifications;
   }
 };
+

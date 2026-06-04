@@ -164,7 +164,9 @@ export default function SavingsAccountsPage() {
       const insights = [];
       
       // 1. Idle Checking Cash Optimization
-      const idleCash = wallets.reduce((s, w) => s + w.balance, 0);
+      const idleCash = wallets
+        .filter((w) => w.type !== "Fixed Deposit" && w.type !== "Savings Account")
+        .reduce((s, w) => s + w.balance, 0);
       const highestAcct = [...accounts].sort((a, b) => (b.interestRate || 0) - (a.interestRate || 0))[0];
       if (idleCash > 500 && highestAcct) {
         const rate = highestAcct.interestRate || 0;

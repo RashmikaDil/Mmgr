@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Plus, Wallet as WalletIcon, MoreVertical, Edit, Trash } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWalletStore } from "@/store/walletStore";
@@ -87,19 +88,30 @@ export default function WalletsPage() {
                   <CardTitle className="text-lg">{wallet.name}</CardTitle>
                   <CardDescription>{wallet.type}</CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => handleEdit(wallet)}
-                    className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(wallet.id)}
-                    className="p-1.5 text-red-500 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                  >
-                    <Trash className="w-4 h-4" />
-                  </button>
+                <div className="flex gap-2 items-center">
+                  {wallet.type === 'Savings Account' || wallet.type === 'Fixed Deposit' ? (
+                    <Link
+                      href={wallet.type === 'Savings Account' ? "/savings-accounts" : "/fixed-deposits"}
+                      className="text-xs px-2.5 py-1 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-100 dark:border-indigo-900/30 transition-colors"
+                    >
+                      View Account &rarr;
+                    </Link>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={() => handleEdit(wallet)}
+                        className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(wallet.id)}
+                        className="p-1.5 text-red-500 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        <Trash className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>

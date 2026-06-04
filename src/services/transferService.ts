@@ -18,6 +18,17 @@ function getCollection(type: AccountType): string {
   }
 }
 
+function getBalanceField(type: AccountType): string {
+  switch (type) {
+    case "fixedDeposit":
+      return "principal";
+    case "investment":
+      return "amountInvested";
+    default:
+      return "balance";
+  }
+}
+
 /**
  * Perform a money transfer between two accounts.
  * Executes an atomic Firestore transaction ensuring balances stay consistent.
@@ -42,14 +53,17 @@ export async function transferMoney(
       throw new Error("One of the accounts does not exist");
     }
 
-    const sourceBalance = sourceSnap.get("balance") as number;
-    const destBalance = destSnap.get("balance") as number;
+    const sourceField = getBalanceField(source.type);
+    const destField = getBalanceField(destination.type);
+
+    const sourceBalance = sourceSnap.get(sourceField) as number;
+    const destBalance = destSnap.get(destField) as number;
 
     if (sourceBalance < amount) {
       throw new Error("Insufficient funds in source account");
     }
 
-    transaction.update(sourceRef, { balance: sourceBalance - amount });
-    transaction.update(destRef, { balance: destBalance + amount });
+    transaction.update(sourceRef, { [sourceField]: sourceBalance - amount });
+    transaction.update(destRef, { [destField]: destBalance + amount });
   });
 }

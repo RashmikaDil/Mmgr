@@ -1,4 +1,4 @@
-export type WalletType = 'Cash' | 'Bank Account' | 'Digital Wallet' | 'Investment Account' | 'Other';
+export type WalletType = 'Cash' | 'Bank Account' | 'Digital Wallet' | 'Investment Account' | 'Other' | 'Fixed Deposit' | 'Savings Account';
 
 export interface Wallet {
   id: string;

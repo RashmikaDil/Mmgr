@@ -9,6 +9,7 @@ import { useTransactionStore } from "@/store/transactionStore";
 import { useWalletStore } from "@/store/walletStore";
 import { useAuth } from "@/hooks/useAuth";
 import { aiService } from "@/services/aiService";
+import { useCurrency } from "@/context/CurrencyContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,7 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
   const { user } = useAuth();
   const { transactions, addTransaction, editTransaction } = useTransactionStore();
   const { wallets, fetchWallets } = useWalletStore();
+  const { formatPrice } = useCurrency();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<{ name: string; confidence: number } | null>(null);
@@ -227,7 +229,7 @@ export function TransactionModal({ isOpen, onClose, transactionToEdit, defaultTy
               </SelectTrigger>
               <SelectContent>
                 {wallets.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>{w.name} ({w.balance})</SelectItem>
+                  <SelectItem key={w.id} value={w.id}>{w.name} ({formatPrice(w.balance)})</SelectItem>
                 ))}
               </SelectContent>
             </Select>

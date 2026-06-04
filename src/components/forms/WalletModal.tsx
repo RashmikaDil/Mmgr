@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const walletSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.enum(['Cash', 'Bank Account', 'Digital Wallet', 'Investment Account', 'Other']),
+  type: z.enum(['Cash', 'Bank Account', 'Digital Wallet', 'Investment Account', 'Other', 'Fixed Deposit', 'Savings Account']),
   balance: z.coerce.number(),
   currency: z.string().min(1, "Currency is required"),
 });

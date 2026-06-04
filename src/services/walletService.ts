@@ -40,13 +40,35 @@ export const walletService = {
   },
 
   async updateWalletBalance(id: string, amountChange: number): Promise<void> {
-    const docRef = doc(db, COLLECTION_NAME, id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const currentBalance = docSnap.data().balance;
-      await updateDoc(docRef, {
-        balance: currentBalance + amountChange
-      });
+    if (id.startsWith("sa_")) {
+      const rawId = id.substring(3);
+      const docRef = doc(db, "savingsAccounts", rawId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const currentBalance = docSnap.data().balance || 0;
+        await updateDoc(docRef, {
+          balance: currentBalance + amountChange
+        });
+      }
+    } else if (id.startsWith("fd_")) {
+      const rawId = id.substring(3);
+      const docRef = doc(db, "fixedDeposits", rawId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const currentPrincipal = docSnap.data().principal || 0;
+        await updateDoc(docRef, {
+          principal: currentPrincipal + amountChange
+        });
+      }
+    } else {
+      const docRef = doc(db, COLLECTION_NAME, id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const currentBalance = docSnap.data().balance;
+        await updateDoc(docRef, {
+          balance: currentBalance + amountChange
+        });
+      }
     }
   }
 };
