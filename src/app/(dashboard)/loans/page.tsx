@@ -1,502 +1,520 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLoanStore } from "@/store/loanStore";
 import { useCurrency } from "@/context/CurrencyContext";
 import { Loan } from "@/types";
 import {
-  Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  PlusCircle, CreditCard, Pencil, Trash2, Calendar, AlertCircle,
-  CheckCircle2, TrendingDown,
+  PlusCircle,
+  TrendingDown,
+  Pencil,
+  Trash2,
+  Calendar,
+  Building,
+  Target,
+  BadgePercent,
+  BrainCircuit,
+  CreditCard,
+  ArrowRight
 } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, Legend,
-} from "recharts";
-import { format, addMonths, differenceInMonths } from "date-fns";
+import { format } from "date-fns";
 
-// ── helpers ────────────────────────────────────────────────────────────────────
-
-/** Calculate monthly EMI using standard formula */
-function calcEMI(principal: number, annualRate: number, termMonths: number): number {
-  if (annualRate === 0) return principal / termMonths;
-  const r = annualRate / 100 / 12;
-  return (principal * r * Math.pow(1 + r, termMonths)) / (Math.pow(1 + r, termMonths) - 1);
-}
-
-/** Generate first N months of amortization schedule for charting */
-function buildAmortizationChart(
-  principal: number,
-  annualRate: number,
-  termMonths: number,
-  maxMonths = 24
-) {
-  const emi = calcEMI(principal, annualRate, termMonths);
-  const r = annualRate / 100 / 12;
-  let balance = principal;
-  const data: { month: string; principal: number; interest: number }[] = [];
-  const months = Math.min(termMonths, maxMonths);
-
-  for (let i = 0; i < months; i++) {
-    const interestPart = balance * r;
-    const principalPart = emi - interestPart;
-    balance = Math.max(0, balance - principalPart);
-    data.push({
-      month: `M${i + 1}`,
-      principal: parseFloat(principalPart.toFixed(2)),
-      interest: parseFloat(interestPart.toFixed(2)),
-    });
-  }
-  return data;
-}
-
-const LOAN_TYPES = ["Personal", "Mortgage", "Student", "Auto", "Other"] as const;
-
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  paid: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-  defaulted: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-};
-
-const EMPTY_FORM = {
+const EMPTY_FORM: Omit<Loan, 'id' | 'userId' | 'createdAt'> = {
   name: "",
-  type: "Personal" as Loan["type"],
-  principal: "",
-  interestRate: "",
-  termMonths: "",
-  startDate: "",
-  dueDate: "",
-  remainingBalance: "",
-  status: "active" as Loan["status"],
+  type: "Personal",
+  principal: 0,
+  interestRate: 0,
+  termMonths: 12,
+  monthlyPayment: 0,
+  remainingBalance: 0,
+  startDate: new Date().toISOString().slice(0, 10),
+  dueDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10),
+  status: "active",
 };
-
-// ── main component ─────────────────────────────────────────────────────────────
 
 export default function LoansPage() {
   const { user } = useAuth();
   const { loans, loading, fetchLoans, addLoan, updateLoan, deleteLoan } = useLoanStore();
+  const { currency, formatPrice } = useCurrency();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Loan | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<Omit<Loan, 'id' | 'userId' | 'createdAt'>>({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
-  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
-  const { currency, formatPrice } = useCurrency();
+
+  // Strategy Widget state
+  const [extraPayment, setExtraPayment] = useState<number>(0);
 
   useEffect(() => {
     if (user?.uid) fetchLoans(user.uid);
   }, [user, fetchLoans]);
 
-  // ── derived stats ─────────────────────────────────────────────────────────────
+  const activeLoans = loans.filter((l) => l.status === "active");
+  const totalDebt = activeLoans.reduce((sum, l) => sum + l.remainingBalance, 0);
+  const totalMonthlyMinimums = activeLoans.reduce((sum, l) => sum + l.monthlyPayment, 0);
 
-  const activeLoans      = loans.filter((l) => l.status === "active");
-  const totalDebt        = activeLoans.reduce((s, l) => s + l.remainingBalance, 0);
-  const totalPrincipal   = loans.reduce((s, l) => s + l.principal, 0);
-  const totalMonthlyEMI  = activeLoans.reduce((s, l) => s + l.monthlyPayment, 0);
-  const totalInterestCost = loans.reduce((l, loan) => {
-    const emi = calcEMI(loan.principal, loan.interestRate, loan.termMonths);
-    return l + (emi * loan.termMonths - loan.principal);
-  }, 0);
+  // Calculate weighted average interest rate
+  const avgInterestRate = totalDebt > 0 
+    ? activeLoans.reduce((sum, l) => sum + (l.interestRate * (l.remainingBalance / totalDebt)), 0) 
+    : 0;
 
-  // Amortization chart for the selected loan (or first active loan)
-  const chartLoan = selectedLoan ?? activeLoans[0] ?? null;
-  const chartData = chartLoan
-    ? buildAmortizationChart(chartLoan.principal, chartLoan.interestRate, chartLoan.termMonths)
-    : [];
+  // -- AI Strategy Calculations --
+  // Helper to simulate payoff timeline
+  const simulatePayoff = (method: 'avalanche' | 'snowball') => {
+    let simulatedLoans = activeLoans.map(l => ({ ...l }));
+    let totalMonths = 0;
+    let totalInterestPaid = 0;
 
-  // ── handlers ─────────────────────────────────────────────────────────────────
+    // Sort strategy
+    if (method === 'avalanche') {
+      simulatedLoans.sort((a, b) => b.interestRate - a.interestRate);
+    } else {
+      simulatedLoans.sort((a, b) => a.remainingBalance - b.remainingBalance);
+    }
 
-  function openAdd() {
-    setEditing(null); setForm(EMPTY_FORM); setOpen(true);
-  }
+    // Rough approximation simulation loop (assuming simple monthly amortization for speed)
+    let safeGuard = 0;
+    while (simulatedLoans.length > 0 && safeGuard < 1200) { // Max 100 years
+      safeGuard++;
+      let extraAvailable = extraPayment;
+      
+      // Pay minimums on all first
+      for (let i = 0; i < simulatedLoans.length; i++) {
+        let loan = simulatedLoans[i];
+        let interestThisMonth = loan.remainingBalance * (loan.interestRate / 100 / 12);
+        totalInterestPaid += interestThisMonth;
+        
+        let minPayment = Math.max(interestThisMonth + 1, loan.monthlyPayment);
+        
+        if (loan.remainingBalance + interestThisMonth <= minPayment) {
+           // Loan paid off by minimum payment!
+           extraAvailable += (minPayment - (loan.remainingBalance + interestThisMonth)); // Roll over remainder
+           loan.remainingBalance = 0;
+        } else {
+           loan.remainingBalance = loan.remainingBalance + interestThisMonth - minPayment;
+        }
+      }
 
-  function openEdit(l: Loan) {
-    setEditing(l);
+      // Filter out paid off loans
+      simulatedLoans = simulatedLoans.filter(l => l.remainingBalance > 0);
+
+      // Apply extra snowball/avalanche money to the highest priority loan
+      if (simulatedLoans.length > 0 && extraAvailable > 0) {
+        let targetLoan = simulatedLoans[0];
+        if (targetLoan.remainingBalance <= extraAvailable) {
+          extraAvailable -= targetLoan.remainingBalance;
+          targetLoan.remainingBalance = 0;
+        } else {
+          targetLoan.remainingBalance -= extraAvailable;
+        }
+      }
+      
+      simulatedLoans = simulatedLoans.filter(l => l.remainingBalance > 0);
+      totalMonths++;
+    }
+
+    return { totalMonths, totalInterestPaid };
+  };
+
+  const avalancheData = useMemo(() => simulatePayoff('avalanche'), [activeLoans, extraPayment]);
+  const snowballData = useMemo(() => simulatePayoff('snowball'), [activeLoans, extraPayment]);
+
+  // Determine winner
+  const avalancheWins = avalancheData.totalInterestPaid < snowballData.totalInterestPaid;
+  const bestStrategy = avalancheWins ? 'Avalanche' : 'Snowball';
+  const interestSaved = Math.abs(avalancheData.totalInterestPaid - snowballData.totalInterestPaid);
+
+  // Handlers
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ ...EMPTY_FORM });
+    setOpen(true);
+  };
+
+  const openEdit = (loan: Loan) => {
+    setEditing(loan);
     setForm({
-      name: l.name,
-      type: l.type,
-      principal: String(l.principal),
-      interestRate: String(l.interestRate),
-      termMonths: String(l.termMonths),
-      startDate: l.startDate,
-      dueDate: l.dueDate,
-      remainingBalance: String(l.remainingBalance),
-      status: l.status,
+      name: loan.name,
+      type: loan.type,
+      principal: loan.principal,
+      interestRate: loan.interestRate,
+      termMonths: loan.termMonths,
+      monthlyPayment: loan.monthlyPayment,
+      remainingBalance: loan.remainingBalance,
+      startDate: loan.startDate,
+      dueDate: loan.dueDate,
+      status: loan.status,
     });
     setOpen(true);
-  }
+  };
 
-  async function handleSubmit() {
+  const handleSubmit = async () => {
     if (!user?.uid) return;
     setSaving(true);
-    const principal = parseFloat(form.principal) || 0;
-    const rate = parseFloat(form.interestRate) || 0;
-    const term = parseInt(form.termMonths) || 0;
-    const emi = calcEMI(principal, rate, term);
-
-    const data: Omit<Loan, "id" | "createdAt"> = {
-      userId: user.uid,
-      name: form.name.trim(),
-      type: form.type,
-      principal,
-      interestRate: rate,
-      termMonths: term,
-      monthlyPayment: parseFloat(emi.toFixed(2)),
-      remainingBalance: form.remainingBalance ? parseFloat(form.remainingBalance) : principal,
-      startDate: form.startDate,
-      dueDate: form.dueDate,
-      status: form.status,
-    };
-
-    if (editing) {
-      await updateLoan(editing.id, data);
-    } else {
-      await addLoan(data);
+    try {
+      if (editing) {
+        await updateLoan(editing.id, form);
+      } else {
+        await addLoan({ ...form, userId: user.uid });
+      }
+      setOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setOpen(false);
-  }
+  };
 
-  async function handleDelete(id: string) {
-    if (confirm("Delete this loan?")) await deleteLoan(id);
-  }
-
-  // Preview EMI
-  const previewEMI = form.principal && form.interestRate && form.termMonths
-    ? calcEMI(parseFloat(form.principal) || 0, parseFloat(form.interestRate) || 0, parseInt(form.termMonths) || 0)
-    : null;
-
-  const previewTotalCost = previewEMI && form.termMonths
-    ? previewEMI * (parseInt(form.termMonths) || 0)
-    : null;
-
-  // ── render ───────────────────────────────────────────────────────────────────
+  const handleDelete = async (id: string) => {
+    if (confirm("Delete this loan record? This action cannot be undone.")) {
+      await deleteLoan(id);
+    }
+  };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Loans</h1>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <TrendingDown className="w-8 h-8 text-rose-600" />
+            Debt & Loans
+          </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Track EMIs, remaining balances, amortization, and total interest costs.
+            Track liabilities, manage repayments, and let AI optimize your debt freedom timeline.
           </p>
         </div>
-        <Button onClick={openAdd} className="gap-2 self-start sm:self-auto">
-          <PlusCircle className="w-4 h-4" /> Add Loan
+        <Button onClick={openAdd} className="gap-2 self-start sm:self-auto bg-rose-600 hover:bg-rose-700 text-white shadow-md">
+          <PlusCircle className="w-4 h-4" />
+          Add Liability
         </Button>
       </div>
 
-      {/* Summary stats */}
+      {/* Summary Stats */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/20 border-red-200 dark:border-red-800">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-700 dark:text-red-300">Total Debt</CardTitle></CardHeader>
+        <Card className="bg-gradient-to-br from-rose-50 to-rose-100/60 dark:from-rose-950/40 dark:to-rose-900/10 border-rose-200 dark:border-rose-900/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">Total Outstanding Debt</CardTitle>
+          </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-900 dark:text-red-100">{formatPrice(totalDebt)}</div>
-            <p className="text-xs text-red-600 dark:text-red-400 mt-1">remaining balance</p>
+            <div className="text-2xl font-bold text-rose-950 dark:text-rose-50">
+              {formatPrice(totalDebt)}
+            </div>
+            <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">Across {activeLoans.length} active loans</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/20 border-orange-200 dark:border-orange-800">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">Monthly EMI</CardTitle></CardHeader>
+
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100/60 dark:from-orange-950/40 dark:to-orange-900/10 border-orange-200 dark:border-orange-900/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-orange-600 dark:text-orange-400">Avg Interest Rate</CardTitle>
+          </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-900 dark:text-orange-100">{formatPrice(Math.round(totalMonthlyEMI))}</div>
-            <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">across active loans</p>
+            <div className="text-2xl font-bold text-orange-950 dark:text-orange-50 flex items-center gap-1.5">
+              <BadgePercent className="w-5 h-5" />
+              {avgInterestRate.toFixed(2)}%
+            </div>
+            <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">Weighted APR</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/30 dark:to-amber-800/20 border-amber-200 dark:border-amber-800">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-amber-700 dark:text-amber-300">Total Interest Cost</CardTitle></CardHeader>
+
+        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/40 dark:to-amber-900/10 border-amber-200 dark:border-amber-900/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Minimum Monthly Payments</CardTitle>
+          </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">{formatPrice(Math.round(totalInterestCost))}</div>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">over full terms</p>
+            <div className="text-2xl font-bold text-amber-950 dark:text-amber-50">
+              {formatPrice(totalMonthlyMinimums)}
+            </div>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Required outflow</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/30 dark:to-slate-800/20 border-slate-200 dark:border-slate-800">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300">Active Loans</CardTitle></CardHeader>
+
+        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/60 dark:from-emerald-950/40 dark:to-emerald-900/10 border-emerald-200 dark:border-emerald-900/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Extra Payment Allocation</CardTitle>
+          </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{activeLoans.length}</div>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">of {loans.length} total</p>
+             <div className="flex items-center gap-2 mt-1">
+               <span className="text-sm font-bold text-emerald-900 dark:text-emerald-50">{currency}</span>
+               <Input 
+                 type="number"
+                 className="h-8 font-bold text-emerald-900 dark:text-emerald-100 bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700 w-full"
+                 value={extraPayment || ""}
+                 onChange={(e) => setExtraPayment(parseFloat(e.target.value) || 0)}
+                 placeholder="0"
+               />
+             </div>
+            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-2">Any extra funds to accelerate payoff</p>
           </CardContent>
         </Card>
       </div>
 
-      {loans.length === 0 ? (
-        <Card className="border-dashed border-2 bg-transparent">
-          <CardContent className="flex flex-col items-center justify-center py-16 gap-4 text-gray-400">
-            <CreditCard className="w-12 h-12 opacity-30" />
-            <p className="text-lg font-medium">No loans tracked yet</p>
-            <p className="text-sm">Add a loan to track EMIs, remaining balance, and amortization.</p>
-            <Button variant="outline" onClick={openAdd} className="mt-2 gap-2">
-              <PlusCircle className="w-4 h-4" /> Add Loan
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {/* Loan cards */}
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {loans.map((loan) => {
-              const paidPct = loan.principal > 0
-                ? Math.min(((loan.principal - loan.remainingBalance) / loan.principal) * 100, 100)
-                : 0;
-              const daysUntilDue = differenceInMonths(new Date(loan.dueDate), new Date());
-              const isOverdue = daysUntilDue < 0 && loan.status === "active";
-
-              return (
-                <Card
-                  key={loan.id}
-                  className={`relative overflow-hidden shadow-sm hover:shadow-md transition-shadow group cursor-pointer ${selectedLoan?.id === loan.id ? "ring-2 ring-blue-500" : ""}`}
-                  onClick={() => setSelectedLoan(selectedLoan?.id === loan.id ? null : loan)}
-                >
-                  {/* Status badge */}
-                  <div className="absolute top-3 right-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[loan.status]}`}>
-                      {loan.status.charAt(0).toUpperCase() + loan.status.slice(1)}
-                    </span>
-                  </div>
-
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        loan.status === "paid" ? "bg-green-100 dark:bg-green-900/40" : "bg-red-100 dark:bg-red-900/40"
-                      }`}>
-                        {loan.status === "paid"
-                          ? <CheckCircle2 className="w-4 h-4 text-green-600" />
-                          : <CreditCard className="w-4 h-4 text-red-500" />}
-                      </div>
-                      <div>
-                        <CardTitle className="text-base leading-tight">{loan.name}</CardTitle>
-                        <CardDescription className="text-xs">{loan.type} Loan</CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="space-y-3">
-                    {/* Principal / Remaining */}
-                    <div className="flex justify-between text-sm">
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Principal</p>
-                        <p className="font-semibold">{formatPrice(loan.principal)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Remaining</p>
-                        <p className={`font-semibold ${loan.remainingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-                          {formatPrice(loan.remainingBalance)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Repayment progress */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <span>{paidPct.toFixed(1)}% repaid</span>
-                        <span>EMI: {formatPrice(Math.round(loan.monthlyPayment))}/mo</span>
-                      </div>
-                      <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="h-2 rounded-full bg-blue-500 transition-all duration-500"
-                          style={{ width: `${paidPct}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Badges */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="secondary" className="text-xs">
-                        <TrendingDown className="w-3 h-3 mr-1" />
-                        {loan.interestRate}% p.a.
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs">
-                        {loan.termMonths} months
-                      </Badge>
-                    </div>
-
-                    {/* Dates */}
-                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {format(new Date(loan.startDate), "dd MMM yyyy")}
-                      </span>
-                      <span className={`flex items-center gap-1 ${isOverdue ? "text-red-500 font-medium" : ""}`}>
-                        {isOverdue && <AlertCircle className="w-3 h-3" />}
-                        Due {format(new Date(loan.dueDate), "dd MMM yyyy")}
-                      </span>
-                    </div>
-                  </CardContent>
-
-                  <CardFooter className="pt-0 gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                    <Button variant="outline" size="sm" className="gap-1 flex-1" onClick={() => openEdit(loan)}>
-                      <Pencil className="w-3 h-3" /> Edit
-                    </Button>
-                    <Button variant="destructive" size="sm" className="gap-1 flex-1" onClick={() => handleDelete(loan.id)}>
-                      <Trash2 className="w-3 h-3" /> Delete
-                    </Button>
-                  </CardFooter>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Amortization chart for selected / first loan */}
-          {chartLoan && chartData.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Amortization Schedule — {chartLoan.name}
+      {/* AI Avalanche vs Snowball Optimizer */}
+      {activeLoans.length > 1 && (
+        <Card className="border border-indigo-100 dark:border-indigo-900/30 shadow-md relative overflow-hidden bg-gradient-to-br from-indigo-50/30 via-white to-white dark:from-indigo-950/20 dark:via-zinc-950 dark:to-zinc-900">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-200/20 dark:bg-indigo-900/10 rounded-full blur-3xl pointer-events-none -mr-10 -mt-10" />
+          <CardHeader className="pb-4 border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                <BrainCircuit className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                  AI Repayment Optimizer
+                  <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-extrabold uppercase px-2 py-0.5 rounded-full">
+                    Recommended: {bestStrategy}
+                  </span>
                 </CardTitle>
-                <CardDescription>
-                  Principal vs interest split per month (first {chartData.length} months)
-                  {loans.length > 1 && " · click a card above to switch"}
+                <CardDescription className="text-xs mt-0.5">
+                  Simulating the fastest and cheapest path to become 100% debt-free.
                 </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip
-                      formatter={(value: any, name: any) => [
-                        `${formatPrice(value)}`,
-                        name === "principal" ? "Principal" : "Interest",
-                      ]}
-                    />
-                    <Legend />
-                    <Bar dataKey="principal" name="Principal" stackId="a" fill="#6366f1" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="interest" name="Interest" stackId="a" fill="#f87171" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+            
+            {/* Avalanche */}
+            <div className={`p-5 rounded-2xl border ${bestStrategy === 'Avalanche' ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-800 ring-1 ring-indigo-500 shadow-sm' : 'bg-gray-50/50 dark:bg-zinc-900/30 border-gray-100 dark:border-zinc-800'}`}>
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100">Avalanche Method</h3>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Focus extra payments on highest interest first.</p>
+                </div>
+                {bestStrategy === 'Avalanche' && <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">Winner</span>}
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500">Debt Free Timeline:</span>
+                  <span className="font-bold text-gray-800 dark:text-gray-200">{Math.floor(avalancheData.totalMonths / 12)}y {avalancheData.totalMonths % 12}m</span>
+                </div>
+                <div className="flex justify-between items-center text-sm border-t border-gray-100 dark:border-zinc-800 pt-3">
+                  <span className="text-gray-500">Total Interest Paid:</span>
+                  <span className={`font-black ${bestStrategy === 'Avalanche' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                    {formatPrice(avalancheData.totalInterestPaid)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Snowball */}
+            <div className={`p-5 rounded-2xl border ${bestStrategy === 'Snowball' ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-800 ring-1 ring-indigo-500 shadow-sm' : 'bg-gray-50/50 dark:bg-zinc-900/30 border-gray-100 dark:border-zinc-800'}`}>
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100">Snowball Method</h3>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Focus extra payments on smallest balance first.</p>
+                </div>
+                {bestStrategy === 'Snowball' && <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">Winner</span>}
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500">Debt Free Timeline:</span>
+                  <span className="font-bold text-gray-800 dark:text-gray-200">{Math.floor(snowballData.totalMonths / 12)}y {snowballData.totalMonths % 12}m</span>
+                </div>
+                <div className="flex justify-between items-center text-sm border-t border-gray-100 dark:border-zinc-800 pt-3">
+                  <span className="text-gray-500">Total Interest Paid:</span>
+                  <span className={`font-black ${bestStrategy === 'Snowball' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                    {formatPrice(snowballData.totalInterestPaid)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          </CardContent>
+          <CardFooter className="bg-gray-50/50 dark:bg-zinc-900/30 border-t border-gray-100 dark:border-zinc-800 p-4">
+            <p className="text-xs text-gray-600 dark:text-gray-400 w-full text-center flex items-center justify-center gap-2">
+              <span className="font-bold text-indigo-600 dark:text-indigo-400">Insight:</span> 
+              You save <span className="font-bold text-emerald-600 dark:text-emerald-400 px-1 bg-emerald-100 dark:bg-emerald-900/30 rounded">{formatPrice(interestSaved)}</span> in interest by following the {bestStrategy} method!
+            </p>
+          </CardFooter>
+        </Card>
       )}
+
+      {/* Loan List */}
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        {loans.map(loan => {
+          const isPaid = loan.status === 'paid';
+          const progress = loan.principal > 0 ? ((loan.principal - loan.remainingBalance) / loan.principal) * 100 : 0;
+
+          return (
+            <Card key={loan.id} className={`relative overflow-hidden group border-gray-200 dark:border-zinc-800 hover:border-rose-300 dark:hover:border-rose-700 transition-all shadow-sm ${isPaid ? 'opacity-60' : ''}`}>
+              <div className={`absolute top-0 left-0 w-full h-1 ${isPaid ? 'bg-emerald-500' : 'bg-gradient-to-r from-rose-500 to-orange-500'}`} />
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-base font-bold line-clamp-1">{loan.name}</CardTitle>
+                    <CardDescription className="text-xs flex items-center gap-1 mt-1">
+                      <Building className="w-3.5 h-3.5 text-gray-400" />
+                      {loan.type} Loan
+                    </CardDescription>
+                  </div>
+                  <div className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded shadow-sm ${isPaid ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400'}`}>
+                     {loan.status}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500">Remaining Balance</p>
+                    <p className={`text-lg font-black ${isPaid ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`}>
+                      {formatPrice(loan.remainingBalance)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-gray-500">Interest</p>
+                    <p className="text-sm font-bold flex items-center justify-end gap-1 text-orange-600 dark:text-orange-400">
+                      <BadgePercent className="w-3.5 h-3.5" />
+                      {loan.interestRate}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-gray-100 dark:border-zinc-800 space-y-2">
+                   <div className="flex justify-between text-xs">
+                     <span className="text-gray-500">Original Principal:</span>
+                     <span className="font-semibold text-gray-700 dark:text-gray-300">{formatPrice(loan.principal)}</span>
+                   </div>
+                   <div className="flex justify-between text-xs">
+                     <span className="text-gray-500">Monthly Payment:</span>
+                     <span className="font-semibold text-gray-700 dark:text-gray-300">{formatPrice(loan.monthlyPayment)}</span>
+                   </div>
+                   
+                   <div className="space-y-1 mt-3">
+                     <div className="flex justify-between text-[10px] font-semibold text-gray-500">
+                       <span>Payoff Progress</span>
+                       <span>{progress.toFixed(1)}%</span>
+                     </div>
+                     <div className="w-full bg-gray-100 dark:bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                       <div className={`${isPaid ? 'bg-emerald-500' : 'bg-rose-500'} h-1.5 transition-all`} style={{ width: `${Math.min(progress, 100)}%` }} />
+                     </div>
+                   </div>
+                </div>
+              </CardContent>
+              <CardFooter className="pt-0 pb-4 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold" onClick={() => openEdit(loan)}>
+                  <Pencil className="w-3 h-3 mr-1" /> Edit
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20" onClick={() => handleDelete(loan.id)}>
+                  <Trash2 className="w-3 h-3 mr-1" /> Delete
+                </Button>
+              </CardFooter>
+            </Card>
+          );
+        })}
+
+        {loans.length === 0 && (
+          <Card className="border-dashed border-2 bg-transparent py-12 md:col-span-2 lg:col-span-3">
+            <CardContent className="flex flex-col items-center justify-center text-center">
+              <CreditCard className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />
+              <p className="text-lg font-bold">No loans tracked yet</p>
+              <p className="text-sm text-gray-500 mt-1 max-w-sm">
+                Add your mortgages, car loans, and credit cards to unlock AI repayment optimization.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Add / Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Loan" : "Add Loan"}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+               <TrendingDown className="w-5 h-5 text-rose-600" />
+               {editing ? "Edit Loan / Liability" : "Add Loan / Liability"}
+            </DialogTitle>
             <DialogDescription>
-              {editing ? "Update loan details. EMI is auto-calculated." : "Track a new loan. EMI will be calculated automatically."}
+              Enter the exact details of your liability to ensure accurate AI calculations.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="loan-name">Loan Name *</Label>
-                <Input id="loan-name" placeholder="e.g. Home Loan" value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <Label>Loan Name / Description</Label>
+                <Input placeholder="e.g. Visa Credit Card, Car Loan" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Type *</Label>
-                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as Loan["type"] })}>
+                <Label>Loan Type</Label>
+                <Select value={form.type} onValueChange={(val: any) => setForm({ ...form, type: val })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {LOAN_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    <SelectItem value="Personal">Personal Loan</SelectItem>
+                    <SelectItem value="Mortgage">Mortgage</SelectItem>
+                    <SelectItem value="Student">Student Loan</SelectItem>
+                    <SelectItem value="Auto">Auto Loan</SelectItem>
+                    <SelectItem value="Other">Other / Credit Card</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="loan-principal">Loan Amount ({currency}) *</Label>
-                <Input id="loan-principal" type="number" min="0" placeholder="500000" value={form.principal}
-                  onChange={(e) => setForm({ ...form, principal: e.target.value })} />
+               <div className="space-y-1.5">
+                <Label>Original Principal Amount</Label>
+                <Input type="number" value={form.principal} onChange={e => setForm({ ...form, principal: parseFloat(e.target.value) || 0 })} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="loan-remaining">Remaining Balance ({currency})</Label>
-                <Input id="loan-remaining" type="number" min="0" placeholder="auto-filled" value={form.remainingBalance}
-                  onChange={(e) => setForm({ ...form, remainingBalance: e.target.value })} />
+                <Label>Current Remaining Balance</Label>
+                <Input type="number" value={form.remainingBalance} onChange={e => setForm({ ...form, remainingBalance: parseFloat(e.target.value) || 0 })} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="loan-rate">Annual Interest Rate (%) *</Label>
-                <Input id="loan-rate" type="number" min="0" step="0.01" placeholder="8.5" value={form.interestRate}
-                  onChange={(e) => setForm({ ...form, interestRate: e.target.value })} />
+               <div className="space-y-1.5">
+                <Label>Interest Rate (APR %)</Label>
+                <Input type="number" step="0.1" value={form.interestRate} onChange={e => setForm({ ...form, interestRate: parseFloat(e.target.value) || 0 })} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="loan-term">Loan Term (months) *</Label>
-                <Input id="loan-term" type="number" min="1" placeholder="240" value={form.termMonths}
-                  onChange={(e) => setForm({ ...form, termMonths: e.target.value })} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="loan-start">Start Date *</Label>
-                <Input id="loan-start" type="date" value={form.startDate}
-                  onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="loan-due">Due / End Date *</Label>
-                <Input id="loan-due" type="date" value={form.dueDate}
-                  onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+                <Label>Minimum Monthly Payment</Label>
+                <Input type="number" value={form.monthlyPayment} onChange={e => setForm({ ...form, monthlyPayment: parseFloat(e.target.value) || 0 })} />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as Loan["status"] })}>
+              <Label>Loan Status</Label>
+              <Select value={form.status} onValueChange={(val: any) => setForm({ ...form, status: val })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="paid">Paid Off 🎉</SelectItem>
                   <SelectItem value="defaulted">Defaulted</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Live EMI preview */}
-            {previewEMI !== null && (
-              <div className="bg-red-50 dark:bg-red-900/20 rounded-md px-4 py-3 space-y-1">
-                <p className="text-xs font-medium text-red-700 dark:text-red-300">EMI Preview</p>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Monthly EMI</span>
-                  <span className="font-bold text-red-700 dark:text-red-300">{formatPrice(Math.round(previewEMI!))}</span>
-                </div>
-                {previewTotalCost && (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Total Payment</span>
-                      <span className="font-medium">{formatPrice(Math.round(previewTotalCost))}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Total Interest</span>
-                      <span className="font-medium text-orange-600">
-                        {formatPrice(Math.round(previewTotalCost - (parseFloat(form.principal) || 0)))}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
           </div>
 
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={saving || !form.name || !form.principal || !form.interestRate || !form.termMonths || !form.startDate || !form.dueDate}
-            >
-              {saving ? "Saving…" : editing ? "Save Changes" : "Add Loan"}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSubmit} disabled={saving || !form.name} className="bg-rose-600 hover:bg-rose-700 text-white">
+              {saving ? "Saving..." : "Save Liability"}
             </Button>
           </DialogFooter>
         </DialogContent>
