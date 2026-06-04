@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bitcoin, PlusCircle, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, AlertCircle, Loader2, Coins } from "lucide-react";
+import { Bitcoin, PlusCircle, TrendingUp, TrendingDown, Pencil, Trash2, RefreshCw, AlertCircle, Loader2, Coins, BrainCircuit } from "lucide-react";
 
 // ── Popular coins ─────────────────────────────────────────────────────────────
 const POPULAR_COINS = [
@@ -346,6 +346,91 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Market Analyzer */}
+      {holdings.length > 0 && (
+        <Card className="border border-indigo-100 dark:border-indigo-900/30 bg-gradient-to-br from-indigo-50/50 via-white to-white dark:from-indigo-950/20 dark:via-zinc-950 dark:to-zinc-900 shadow-md relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-200/20 dark:bg-indigo-900/10 rounded-full blur-3xl pointer-events-none -mr-10 -mt-10" />
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                <BrainCircuit className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-1.5">
+                  AI Market Analyzer
+                  <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 font-extrabold uppercase px-1.5 py-0.5 rounded-full">
+                    Real-Time
+                  </span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Actionable insights based on your portfolio ROI and global 24h momentum.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+              {holdings.map(h => {
+                const stats = getHoldingStats(h);
+                if (!stats) return null;
+                
+                let signal = "HOLD";
+                let color = "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-900/50";
+                let reason = "Normal market conditions. Maintain position.";
+
+                if (stats.roi !== undefined) {
+                  if (stats.roi > 50) {
+                    signal = "TAKE PROFITS";
+                    color = "text-purple-600 bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900/50";
+                    reason = `Exceptional ROI (+${stats.roi.toFixed(0)}%). Consider securing partial gains to lock in profit.`;
+                  } else if (stats.roi > 20 && stats.change24h > 5) {
+                    signal = "RIDING MOMENTUM";
+                    color = "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50";
+                    reason = `Strong profit (+${stats.roi.toFixed(0)}%) with ongoing upward momentum. Let winners run.`;
+                  } else if (stats.roi < -30 && stats.change24h > 2) {
+                    signal = "ACCUMULATE";
+                    color = "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50";
+                    reason = `Deep discount (${stats.roi.toFixed(0)}%) with recent positive momentum. Good entry point.`;
+                  } else if (stats.roi < -40) {
+                    signal = "DCA / HOLD";
+                    color = "text-amber-600 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50";
+                    reason = `Heavy drawdown. Consider Dollar Cost Averaging (DCA) to lower your average entry price.`;
+                  } else if (stats.change24h > 10) {
+                    signal = "STRONG HOLD";
+                    color = "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50";
+                    reason = "Massive 24h upward momentum. Do not sell into strength yet.";
+                  } else if (stats.change24h < -10) {
+                    signal = "CAUTION";
+                    color = "text-rose-600 bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50";
+                    reason = "Sharp 24h drop. Monitor support levels closely before taking action.";
+                  }
+                } else {
+                   if (stats.change24h > 10) {
+                     signal = "BULLISH";
+                     color = "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50";
+                     reason = "High upward volatility today.";
+                   } else if (stats.change24h < -10) {
+                     signal = "BEARISH";
+                     color = "text-rose-600 bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50";
+                     reason = "Heavy sell-off today.";
+                   }
+                }
+
+                return (
+                  <div key={h.id} className={`p-3 rounded-xl border flex flex-col gap-2 transition-all ${color}`}>
+                    <div className="flex justify-between items-center">
+                       <span className="text-xs font-bold uppercase tracking-wider">{h.symbol}</span>
+                       <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white/60 dark:bg-black/30 shadow-sm">{signal}</span>
+                    </div>
+                    <p className="text-xs font-medium opacity-90 leading-tight">{reason}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Loading skeleton */}
       {loading && holdings.length === 0 && (
