@@ -384,53 +384,79 @@ export const aiService = {
 
     const expenses = transactions.filter((t: any) => t.type === "expense");
     const totalExpenses = expenses.reduce((s: number, t: any) => s + t.amount, 0);
+
+    // 1. Health Score
+    if (q.includes("health") || q.includes("score") || q.includes("rating")) {
+      const health = this.analyzeFinancialHealth(wallets, savingsAccounts, fixedDeposits, transactions);
+      let response = `Here is your **Financial Health Score**: \n\n## **${health.score}/100**\n\n`;
+      response += `**Breakdown:**\n`;
+      response += `- Savings Rate: ${health.factors.savingsRate}/100\n`;
+      response += `- Emergency Fund: ${health.factors.emergencyFund} months covered\n`;
+      response += `- Expense Ratio: ${health.factors.expenseRatio}%\n`;
+      response += `- Consistency: ${health.factors.consistency}/100\n\n`;
+      response += `**Recommendations:**\n`;
+      health.recommendations.forEach(rec => response += `- ${rec}\n`);
+      return response;
+    }
+
+    // 2. Yield Optimization / Strategy
+    if (q.includes("optimize") || q.includes("yield") || q.includes("strategy") || q.includes("recommend")) {
+      let response = `### 📈 Yield Optimization Strategy\n\n`;
+      response += `You currently have **LKR ${checkingBalance.toLocaleString()}** in checking (0% yield) and **LKR ${fdBalance.toLocaleString()}** in Fixed Deposits.\n\n`;
+      
+      if (checkingBalance > totalLiquid * 0.3 && checkingBalance > 0) {
+        const excessCash = checkingBalance - (totalLiquid * 0.2); // Keep 20% liquid
+        response += `**⚠️ High Idle Cash Detected!**\nYou have an unusually high amount of idle cash in checking accounts. We recommend keeping only 20-30% of your net worth strictly liquid for emergencies.\n\n`;
+        response += `**Action Plan:**\n`;
+        response += `Consider moving **LKR ${excessCash.toLocaleString()}** into a High-Yield Fixed Deposit ladder or Savings Account immediately to prevent inflation erosion.\n`;
+      } else if (fdBalance > 0) {
+        response += `Your cash allocation is efficient! Since you utilize Fixed Deposits, consider implementing a **Yield Laddering** strategy: split your next investment into multiple FDs maturing every 3-6 months. This maximizes interest while maintaining rolling liquidity.\n`;
+      } else {
+        response += `**Action Plan:**\nConsider opening your first **Fixed Deposit**. Long-term deposits currently offer the best guaranteed, risk-free ROI to combat inflation.\n`;
+      }
+      return response;
+    }
     
-    if (q.includes("spent") || q.includes("expense") || q.includes("food") || q.includes("shopping")) {
-      // Analyze category spending
-      let response = `Based on your recent transaction ledger, you have total expenses of **LKR ${totalExpenses.toLocaleString()}**.\n\nHere is your expense category breakdown:\n`;
+    // 3. Expenses & Spending
+    if (q.includes("spent") || q.includes("expense") || q.includes("category") || q.includes("totals")) {
+      let response = `Based on your recent transaction ledger, you have total expenses of **LKR ${totalExpenses.toLocaleString()}**.\n\n### 📊 Expense Breakdown:\n`;
       
       const categoryTotals: Record<string, number> = {};
       expenses.forEach((t: any) => {
         categoryTotals[t.categoryId] = (categoryTotals[t.categoryId] || 0) + t.amount;
       });
 
-      Object.entries(categoryTotals).forEach(([catId, amount]) => {
+      const sorted = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+      sorted.forEach(([catId, amount]) => {
         const catName = CATEGORY_MAP[catId] || "Other";
         response += `- **${catName}**: LKR ${amount.toLocaleString()}\n`;
       });
 
-      response += `\n*Advice*: Consider setting spending limits inside the **Budgets** section to curb high-spending categories.`;
-      return response;
-    }
-
-    if (q.includes("fd") || q.includes("fixed deposit") || q.includes("interest")) {
-      const activeFDs = fixedDeposits.filter((fd: any) => fd.status === 'active');
-      const totalFDPrincipal = activeFDs.reduce((s: number, fd: any) => s + fd.principal, 0);
-      
-      let response = `You currently have **${activeFDs.length} active Fixed Deposits** totaling **LKR ${totalFDPrincipal.toLocaleString()}** in principal investments.\n\n`;
-      if (activeFDs.length > 0) {
-        response += "Your FDs are locking in guaranteed yields. Consider implementing a **reinvestment laddering strategy** (e.g. splitting deposits into 6-month and 12-month durations) to ensure you maintain liquidity while capturing maximum interest yield.";
-      } else {
-        response += "You currently have no active Fixed Deposits. Lock in high yields! Standard Fixed Deposits are currently outperforming standard savings rates. Route a portion of checking cash here.";
+      if (sorted.length > 0) {
+        const topCat = CATEGORY_MAP[sorted[0][0]] || "Other";
+        response += `\n*Advice*: **${topCat}** is your highest expense category. Consider setting a strict budget limit for it in the **Budgets** section to boost your savings rate!`;
       }
       return response;
     }
 
-    if (q.includes("save") || q.includes("goal") || q.includes("budget")) {
+    // 4. Goals & Savings
+    if (q.includes("save") || q.includes("goal") || q.includes("track")) {
       if (goals.length === 0) {
-        return "You haven't defined any **Savings Goals** yet! Setting goals like an 'Emergency Fund' or 'Vacation' increases savings success rates by over 40%. Jump over to the **Goals** dashboard to get started.";
+        return "You haven't defined any **Savings Goals** yet! Setting goals like an 'Emergency Fund' or 'Vacation' increases savings success rates by over 40%. Jump over to the **Savings & Goals** dashboard to get started.";
       }
       
-      let response = "Here is a progress projection for your active Savings Goals:\n\n";
+      let response = "### 🎯 Savings Goals Projection\n\n";
       goals.forEach((g: any) => {
         const percent = Math.round((g.currentAmount / g.targetAmount) * 100);
-        response += `- **${g.name}**: ${percent}% complete (${g.currentAmount.toLocaleString()} / ${g.targetAmount.toLocaleString()} LKR)\n`;
+        const icon = percent >= 100 ? "✅" : "⏳";
+        response += `- ${icon} **${g.name}**: ${percent}% complete (${g.currentAmount.toLocaleString()} / ${g.targetAmount.toLocaleString()})\n`;
       });
-      response += "\n*AI Recommendation*: Maintain a steady savings rate of at least 15% of monthly income to reach these goals ahead of schedule.";
+      response += "\n*AI Tip*: Maintain a steady savings contribution to reach these milestones ahead of schedule! You can simulate timeline projections on the Savings page.";
       return response;
     }
 
-    return `Hello! I am your AI Financial Coach. 🤖\n\nI can analyze your bank accounts, savings portfolios, FDs, and expense transactions to advise you. You have total liquid assets of **LKR ${totalLiquid.toLocaleString()}** (Checking: ${checkingBalance.toLocaleString()}, Savings: ${savingsBalance.toLocaleString()}, FDs: ${fdBalance.toLocaleString()}).\n\n**Ask me queries like:**\n- *"How much did I spend?"*\n- *"Analyze my fixed deposits"* \n- *"Review my savings goals"*`;
+    // 5. Default
+    return `Hello! I am your AI Financial Coach. 🤖\n\nI can analyze your bank accounts, savings portfolios, FDs, and expense transactions to advise you. You have total liquid assets of **LKR ${totalLiquid.toLocaleString()}** (Checking: ${checkingBalance.toLocaleString()}, Savings: ${savingsBalance.toLocaleString()}, FDs: ${fdBalance.toLocaleString()}).\n\n**Ask me queries like:**\n- *"Calculate my Financial Health Score rating"*\n- *"Recommend Fixed Deposit yield optimization strategy"*\n- *"Analyze my recent spending category totals"* \n- *"Am I on-track to meet my savings goals?"*`;
   },
 
   /** Simple 3-month moving-average forecast for income and expenses */
