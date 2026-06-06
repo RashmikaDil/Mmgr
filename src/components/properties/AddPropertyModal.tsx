@@ -90,18 +90,18 @@ export function AddPropertyModal({ isOpen, onClose, propertyToEdit }: AddPropert
     setIsSubmitting(true);
     setError(null);
     try {
+      const { walletId, ...propertyData } = data;
+      
       if (propertyToEdit) {
         await editProperty(propertyToEdit.id, {
-          ...data,
-          walletId: undefined, // Don't save walletId to property
-          currentValue: propertyToEdit.currentValue
+          ...propertyData,
+          currentValue: propertyToEdit.currentValue // retain current value on edit unless specifically updating it
         });
       } else {
         await addProperty({
-          ...data,
-          walletId: undefined, // Don't save walletId to property
+          ...propertyData,
           userId: user.uid,
-          currentValue: data.purchasePrice,
+          currentValue: propertyData.purchasePrice,
         });
 
         // If a wallet is selected, create an expense transaction
@@ -177,7 +177,7 @@ export function AddPropertyModal({ isOpen, onClose, propertyToEdit }: AddPropert
             <div className="space-y-2">
               <Label htmlFor="walletId">Fund Purchase from Wallet (Optional)</Label>
               <Select 
-                onValueChange={(value) => setValue("walletId", value)} 
+                onValueChange={(value) => setValue("walletId", value || undefined)} 
                 defaultValue="none"
               >
                 <SelectTrigger>
