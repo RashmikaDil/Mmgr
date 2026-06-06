@@ -191,3 +191,20 @@ export interface Alert {
   createdAt: string;
 }
 
+export interface PropertyAsset {
+  id: string;
+  userId: string;
+  familyId?: string;
+  name: string;
+  type: 'Vehicle' | 'Land' | 'Real Estate' | 'Valuable' | 'Other';
+  purchasePrice: number;
+  purchaseDate: string; // YYYY-MM-DD
+  currentValue: number; // Initially set by user or same as purchase price
+  aiEstimatedValue?: number; // Latest value predicted by AI
+  aiValuationDate?: string; // Timestamp of the last AI valuation
+  aiValuationReasoning?: string; // AI's explanation for the valuation
+  description?: string;
+  location?: string;
+  createdAt: string;
+}
+
