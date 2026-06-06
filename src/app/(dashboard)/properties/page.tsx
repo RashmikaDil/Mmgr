@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePropertyStore } from "@/store/propertyStore";
 import { PropertyAsset } from "@/types";
+import { useCurrency } from "@/context/CurrencyContext";
 import { Button } from "@/components/ui/button";
 import { Plus, MapPin, TrendingUp, Wallet, ArrowUpRight } from "lucide-react";
 import { AddPropertyModal } from "@/components/properties/AddPropertyModal";
@@ -12,6 +13,7 @@ import { PropertyCard } from "@/components/properties/PropertyCard";
 export default function PropertiesPage() {
   const { user } = useAuth();
   const { properties, loading, fetchProperties } = usePropertyStore();
+  const { formatPrice } = useCurrency();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [propertyToEdit, setPropertyToEdit] = useState<PropertyAsset | null>(null);
 
@@ -29,10 +31,6 @@ export default function PropertiesPage() {
   const handleAddNew = () => {
     setPropertyToEdit(null);
     setIsModalOpen(true);
-  };
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
   };
 
   const totalValue = properties.reduce((sum, p) => sum + (p.aiEstimatedValue || p.currentValue), 0);
@@ -67,7 +65,7 @@ export default function PropertiesPage() {
             <span>Total Asset Value</span>
           </div>
           <div className="text-3xl font-bold text-gray-900 dark:text-white">
-            {formatCurrency(totalValue)}
+            {formatPrice(totalValue)}
           </div>
         </div>
 
@@ -78,7 +76,7 @@ export default function PropertiesPage() {
           </div>
           <div className="flex items-baseline space-x-2">
             <span className={`text-3xl font-bold ${totalGain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-              {totalGain > 0 ? '+' : ''}{formatCurrency(totalGain)}
+              {totalGain > 0 ? '+' : ''}{formatPrice(totalGain)}
             </span>
             <span className={`flex items-center text-sm font-medium ${totalGain >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
               {totalGain > 0 && <ArrowUpRight className="h-4 w-4 mr-1" />}

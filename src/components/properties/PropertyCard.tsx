@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PropertyAsset } from "@/types";
 import { usePropertyStore } from "@/store/propertyStore";
 import { aiValuationService } from "@/services/aiValuationService";
+import { useCurrency } from "@/context/CurrencyContext";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MapPin, Car, Home, Gem, Package, Sparkles, TrendingUp, TrendingDown, Edit, Trash2 } from "lucide-react";
@@ -25,6 +26,7 @@ const getIcon = (type: string) => {
 
 export function PropertyCard({ property, onEdit }: PropertyCardProps) {
   const { editProperty, deleteProperty } = usePropertyStore();
+  const { formatPrice } = useCurrency();
   const [isValuating, setIsValuating] = useState(false);
   
   const Icon = getIcon(property.type);
@@ -32,10 +34,6 @@ export function PropertyCard({ property, onEdit }: PropertyCardProps) {
   const isUp = currentValue > property.purchasePrice;
   const isDown = currentValue < property.purchasePrice;
   const diffPercent = Math.abs(((currentValue - property.purchasePrice) / property.purchasePrice) * 100);
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-  };
 
   const handleAIValuation = async () => {
     setIsValuating(true);
@@ -81,7 +79,7 @@ export function PropertyCard({ property, onEdit }: PropertyCardProps) {
         <div>
           <div className="text-sm text-zinc-500 dark:text-zinc-400 mb-1">Current Estimated Value</div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-bold">{formatCurrency(currentValue)}</span>
+            <span className="text-2xl font-bold">{formatPrice(currentValue)}</span>
             {(isUp || isDown) && (
               <span className={`flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full ${isUp ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                 {isUp ? <TrendingUp size={12} className="mr-1" /> : <TrendingDown size={12} className="mr-1" />}
@@ -90,7 +88,7 @@ export function PropertyCard({ property, onEdit }: PropertyCardProps) {
             )}
           </div>
           <div className="text-xs text-zinc-500 mt-1">
-            Purchase Price: {formatCurrency(property.purchasePrice)}
+            Purchase Price: {formatPrice(property.purchasePrice)}
           </div>
         </div>
 
