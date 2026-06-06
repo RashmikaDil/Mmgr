@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useWalletStore } from "@/store/walletStore";
+import { transactionService } from "@/services/transactionService";
 
 const propertySchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -21,6 +23,7 @@ const propertySchema = z.object({
   purchaseDate: z.string().min(1, "Purchase date is required"),
   location: z.string().optional(),
   description: z.string().optional(),
+  walletId: z.string().optional(),
 });
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
@@ -36,10 +39,11 @@ const PROPERTY_TYPES = ['Vehicle', 'Land', 'Real Estate', 'Valuable', 'Other'];
 export function AddPropertyModal({ isOpen, onClose, propertyToEdit }: AddPropertyModalProps) {
   const { user } = useAuth();
   const { addProperty, editProperty } = usePropertyStore();
+  const { wallets, fetchWallets } = useWalletStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<PropertyFormValues>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
     defaultValues: {
       name: "",
@@ -48,8 +52,15 @@ export function AddPropertyModal({ isOpen, onClose, propertyToEdit }: AddPropert
       purchaseDate: new Date().toISOString().slice(0, 10),
       location: "",
       description: "",
+      walletId: "none",
     }
   });
+
+  useEffect(() => {
+    if (isOpen && user && wallets.length === 0) {
+      fetchWallets(user.uid);
+    }
+  }, [isOpen, user, fetchWallets, wallets.length]);
 
   useEffect(() => {
     if (propertyToEdit) {
@@ -69,6 +80,7 @@ export function AddPropertyModal({ isOpen, onClose, propertyToEdit }: AddPropert
         purchaseDate: new Date().toISOString().slice(0, 10),
         location: "",
         description: "",
+        walletId: "none",
       });
     }
   }, [propertyToEdit, reset]);
@@ -81,14 +93,33 @@ export function AddPropertyModal({ isOpen, onClose, propertyToEdit }: AddPropert
       if (propertyToEdit) {
         await editProperty(propertyToEdit.id, {
           ...data,
-          currentValue: propertyToEdit.currentValue // retain current value on edit unless specifically updating it
+          walletId: undefined, // Don't save walletId to property
+          currentValue: propertyToEdit.currentValue
         });
       } else {
         await addProperty({
           ...data,
+          walletId: undefined, // Don't save walletId to property
           userId: user.uid,
-          currentValue: data.purchasePrice, // Initially set to purchase price
+          currentValue: data.purchasePrice,
         });
+
+        // If a wallet is selected, create an expense transaction
+        if (data.walletId && data.walletId !== "none" && data.purchasePrice > 0) {
+          await transactionService.createTransaction({
+            userId: user.uid,
+            walletId: data.walletId,
+            type: "expense",
+            title: `Purchased ${data.name}`,
+            amount: data.purchasePrice,
+            categoryId: "cat-exp-9", // "Other" category or we could create a new one
+            date: data.purchaseDate,
+            isRecurring: false,
+            notes: `Auto-generated from property purchase: ${data.name}`
+          });
+          // Refresh wallets to show new balance
+          await fetchWallets(user.uid);
+        }
       }
       onClose();
     } catch (err: any) {
@@ -141,6 +172,29 @@ export function AddPropertyModal({ isOpen, onClose, propertyToEdit }: AddPropert
               {errors.purchaseDate && <p className="text-sm text-red-500">{errors.purchaseDate.message}</p>}
             </div>
           </div>
+
+          {!propertyToEdit && (
+            <div className="space-y-2">
+              <Label htmlFor="walletId">Fund Purchase from Wallet (Optional)</Label>
+              <Select 
+                onValueChange={(value) => setValue("walletId", value)} 
+                defaultValue="none"
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select wallet to deduct funds" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Do not deduct from wallet</SelectItem>
+                  {wallets.map((wallet) => (
+                    <SelectItem key={wallet.id} value={wallet.id}>
+                      {wallet.name} ({wallet.balance.toLocaleString()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 dark:text-gray-400">If selected, an expense transaction will be created automatically.</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="location">Location (Optional)</Label>
