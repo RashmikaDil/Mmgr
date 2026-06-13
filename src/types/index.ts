@@ -197,12 +197,21 @@ export interface PropertyAsset {
   familyId?: string;
   name: string;
   type: 'Vehicle' | 'Land' | 'Real Estate' | 'Valuable' | 'Other';
+  currency: string;
+  condition?: 'Pristine' | 'Excellent' | 'Good' | 'Fair' | 'Poor';
+  assetIdentifier?: string; // e.g., VIN, Serial Number, Deed
   purchasePrice: number;
   purchaseDate: string; // YYYY-MM-DD
   currentValue: number; // Initially set by user or same as purchase price
+  enableAutoValuation: boolean;
   aiEstimatedValue?: number; // Latest value predicted by AI
   aiValuationDate?: string; // Timestamp of the last AI valuation
   aiValuationReasoning?: string; // AI's explanation for the valuation
+  liquidityScore?: 'High' | 'Medium' | 'Low';
+  expectedYield?: number; // Annual % return
+  projectionModel?: 'straight-line' | 'historical' | 'none';
+  linkedLiabilityId?: string; // ID of the linked mortgage or loan
+  documentUrls?: string[];
   description?: string;
   location?: string;
   createdAt: string;
